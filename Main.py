@@ -11,8 +11,6 @@ import time
 import random
 import sys
 
-#ftp://swc:water@lidarftp.swc.nd.gov/LiDAR_USGS3DEP_QL2/3DEP_Southwest/Block_1_D21/BareEarth/
-
 def time_it(func):
     def wrapper(*args, **kwargs):
         start_time = time.time()  # Start timing
