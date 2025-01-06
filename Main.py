@@ -809,6 +809,9 @@ def working_copy():
 
 if __name__ == "__main__":
     arcpy.env.overwriteOutput = True
+    arcpy.env.addOutputsToMap = False
+    
+    holderFolder()
     singlepart_rand = random.randint(1, 99999)
     working_copy()
     
@@ -817,7 +820,7 @@ if __name__ == "__main__":
 
     # Get the folder containing the ArcGIS Pro project
     project_folder = os.path.dirname(project.filePath)
-
+    
     gdb = os.path.join(project_folder, 'Default.gdb')
     
     x, sjo_Number = get_sp() 
@@ -825,7 +828,7 @@ if __name__ == "__main__":
     spatial_reference = arcpy.SpatialReference(4326)  
     # Begin Sequence
     name = "PointLayer"
-    holderFolder()
+    create_lidargdb()
     check_sqlite()
     spatial_join()
     df_ret = get_df("SpatialJoin_Output")
@@ -843,17 +846,10 @@ if __name__ == "__main__":
     
     # ------------------------
 
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
-
-    # Define the geodatabase and output folder
-    gdb_path = os.path.join(project_folder, 'lidar.gdb')
-
-
     # Set the directory and spatial reference
     directory = os.path.join(project_folder, 'ConvertedSHP')
     file_desc = os.path.join(project_folder, f'SJO\SpatialJoin_Output{sjo_Number}.shp')
-
+    
     desc = arcpy.Describe(file_desc)
     spatial_reference = desc.spatialReference
     data_dict = {}
@@ -908,13 +904,11 @@ if __name__ == "__main__":
                 data_dict[key].add(master_val.centroid)  
 
     # Fix this to work with existing
-    arcpy.env.addOutputsToMap = False
     line_gdb = os.path.join(project_folder, 'Default.gdb')
     line_shp = os.path.join(line_gdb, 'PolylineLayer')
 
     # Set the workspace to the geodatabase containing the feature class
     arcpy.env.workspace = line_gdb
-    
     
     mainfileFID_arr = sorted(mainfileFID_arr) 
     count = 0
@@ -927,6 +921,7 @@ if __name__ == "__main__":
             count += 1
     cleanup(10)
     print('done_main_file')
+
 
 
 
