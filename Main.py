@@ -690,7 +690,7 @@ def working_copy():
 
     for map in project.listMaps():
             for layer in map.listLayers():
-                if layer.name == "Selected_2":
+                if layer.name == "GRIT_Minor_Structures":
                     fp2 = layer.dataSource
 
     cols = ['Id', 'SHAPE@']
