@@ -121,7 +121,7 @@ def holderFolder():
         else:
             print(f"Failed to download the file. Status code: {response.status_code}")
     else:
-        print(f"{check_file} already exists.")
+        pass
 
     # Grab data source from API
     grit_layer = os.path.join(lidar_gdb_path, "GRIT_Minor_Structures")
