@@ -435,10 +435,7 @@ def process_geospatial_data(buffer_distance="50 Meters"):
 
 @time_it
 def correct_output():
-    aprx = arcpy.mp.ArcGISProject("CURRENT")
-    current_project_path = aprx.filePath
-    directory = os.path.dirname(current_project_path)
-    path = os.path.join(directory, "HolderFolder")
+    path = os.path.join(project_folder, "HolderFolder")
     feature_class = os.path.join(path, f"singlepart_output{singlepart_rand}.shp")
 
     geo_sr = arcpy.SpatialReference(4326)
