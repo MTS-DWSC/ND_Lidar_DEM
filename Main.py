@@ -106,15 +106,23 @@ def get_sp():
     conn.close()
     return  [max_fid, max_processed]
 
+def create_lidargdb():
+    lidar_gdb_path = os.path.join(project_folder, 'lidar.gdb')
+
+    if not arcpy.Exists(lidar_gdb_path):
+        arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
+
 
 def holderFolder():
-    project = arcpy.mp.ArcGISProject("CURRENT")
     folder = "HolderFolder"
-    current_project_path = project.filePath
-    current_directory = os.path.dirname(current_project_path)
-    dest = os.path.join(current_directory, folder)
+    dest = os.path.join(project_folder, folder)
     if not os.path.exists(dest):
         os.makedirs(dest)
+        
+    lidar_gdb_path = os.path.join(project_folder, 'lidar.gdb')
+    if not arcpy.Exists(lidar_gdb_path):
+        arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
+
     return
 
 def delete_sj():
