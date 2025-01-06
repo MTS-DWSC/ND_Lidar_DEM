@@ -887,7 +887,7 @@ if __name__ == "__main__":
             # Insert the new polyline into the feature class
             cursor.insertRow([polyline, mainfileFID_arr[count]])
             count += 1
-    #cleanup(10)
+    cleanup(10)
     print('done_main_file')
 
 
