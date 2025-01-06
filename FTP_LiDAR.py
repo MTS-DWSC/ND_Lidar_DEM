@@ -667,13 +667,11 @@ def cleanup(count: int) -> None:
             arcpy.Delete_management(fp)
             itter += 1
             if itter == count:
-                print(f"Deleted {count} number of files.")
                 break
 
         shutil.rmtree(ConvertedSHP)
         shutil.rmtree(Hold_DEMs)
         delete_sj()
-        print("End clean.")
 
 def working_copy():
     sr = arcpy.SpatialReference(4326)
