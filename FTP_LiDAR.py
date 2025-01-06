@@ -100,13 +100,11 @@ def holderFolder():
     dest = os.path.join(project_folder, folder)
     if not os.path.exists(dest):
         os.makedirs(dest)
-        print(f"Folder created at {dest}")
     
     # Create folder to house the geodatabase
     lidar_gdb_path = os.path.join(project_folder, 'lidar.gdb')
     if not arcpy.Exists(lidar_gdb_path):
         arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
-        print("File geodatabase created.")
 
     # URL to the raw ZIP file
     url = "https://github.com/MTS-DWSC/ND_Lidar_DEM/raw/main/ND_Index.zip"
