@@ -753,129 +753,112 @@ def working_copy():
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
 
-    '''
-    with arcpy.da.InsertCursor(feature_class_name, ["SHAPE@"]) as cursor:
-        for x in geo_arr:
-            poly_point = arcpy.PointGeometry(x, sr)
-            cursor.insertRow(poly_point)
-    '''
-    # Add the feature class to the current map
-    aprx = arcpy.mp.ArcGISProject("CURRENT")  # Use
-
 if __name__ == "__main__":
+    # Environment setup
     arcpy.env.overwriteOutput = True
     arcpy.env.addOutputsToMap = False
-    
-    holderFolder()
-    singlepart_rand = random.randint(1, 99999)
-    working_copy()
-    
-    # Get the current ArcGIS Pro project
-    project = arcpy.mp.ArcGISProject("CURRENT")
 
-    # Get the folder containing the ArcGIS Pro project
+    # Get the current ArcGIS Pro project and its folder
+    project = arcpy.mp.ArcGISProject("CURRENT")
     project_folder = os.path.dirname(project.filePath)
-    
     gdb = os.path.join(project_folder, 'Default.gdb')
     
+    # Create necessary folders and geodatabases
+    holderFolder()
+    create_lidargdb()
+
+    # Generate random number and get spatial information
+    singlepart_rand = random.randint(1, 99999)
     x, sjo_Number = get_sp() 
     sjo_Number += 1
     spatial_reference = arcpy.SpatialReference(4326)  
-    # Begin Sequence
-    name = "PointLayer"
-    create_lidargdb()
+
+    # Perform preliminary data processing
+    working_copy()
     check_sqlite()
     spatial_join()
+
+    # Get DataFrame from the spatial join result and populate folders
     df_ret = get_df("SpatialJoin_Output")
     populate_folder(df_ret)
 
-    ##raster_crs_conversion() Need for ML, breaks current itteration
+    # CRS conversion
+    name = "PointLayer"
     convert_crs(name)
-    
-    # ------------------------
+
+    # Geospatial data processing
     process_geospatial_data()
     correct_output()
     
+    # Mask extraction and shapefile conversion
     mask_extraction()
     convert_shp()
-    
-    # ------------------------
 
-    # Set the directory and spatial reference
+    # Prepare to process the shapefiles
     directory = os.path.join(project_folder, 'ConvertedSHP')
-    file_desc = os.path.join(project_folder, f'SJO\SpatialJoin_Output{sjo_Number}.shp')
+    file_desc = os.path.join(project_folder, f'SJO/SpatialJoin_Output{sjo_Number}.shp')
     
     desc = arcpy.Describe(file_desc)
     spatial_reference = desc.spatialReference
+
+    # Initialize data storage
     data_dict = {}
-    num_arr, mainfileFID_arr = get_ids()[0], get_ids()[1]
-    
-    # Loop through the files in the directory
+    num_arr, mainfileFID_arr = get_ids()
+    mainfileFID_arr = sorted(mainfileFID_arr)
+
+    # Process shapefiles
     for filename in os.listdir(directory):
         if filename.endswith('.shp'):
             key = filename.split("_")[1]
-            if int(key) in num_arr: 
+            if int(key) in num_arr:
                 shapefile_path = os.path.join(directory, filename)
 
-                # Read shapefile into a pandas DataFrame
+                # Load shapefile into a DataFrame
                 cols = ['FID', 'Id', 'gridcode', 'SHAPE@']
                 numpy_array = arcpy.da.TableToNumPyArray(shapefile_path, cols)
                 df = pd.DataFrame(numpy_array)
 
-                # Sort DataFrame by 'gridcode' column to get the smallest values
+                # Get the smallest gridcode values
                 df_sorted = df.nsmallest(n=30, columns=['gridcode'])
 
-                # Extract the key from the filename
-                key = filename.split("_")[1]
-                min_dist = float('inf')  # Initialize min_dist as infinity
-                start_point = get_id_sjo(key)  
+                # Process each point to find the closest one
+                start_point = get_id_sjo(key)
+                min_dist = float('inf')
+                master_val = None
 
-                # Iterate over the sorted DataFrame
-                for index, row in df_sorted.iterrows():
+                for _, row in df_sorted.iterrows():
                     cell = row['SHAPE@']
-                    #id_FID = row['MainFileID']
-                    geo_sr = spatial_reference
                     centroid_geom = arcpy.PointGeometry(cell.centroid, cell.spatialReference)
-                    # Project the centroid to WGS 84
-                    projected_centroid = centroid_geom.projectAs(geo_sr)
+                    projected_centroid = centroid_geom.projectAs(spatial_reference)
 
-                    x = projected_centroid.centroid.X  # Longitude
-                    y = projected_centroid.centroid.Y  # Latitude
-                    point = arcpy.Point(x, y)
-                    # Create a PointGeometry object for the current point
+                    point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
                     end_point = arcpy.PointGeometry(point, spatial_reference)
 
-                    # Calculate the distance from the start point
                     distance = start_point.distanceTo(end_point)
-
-                    # Update min_dist if the current distance is smaller
                     if distance < min_dist:
                         min_dist = distance
                         master_val = end_point
 
-                # Add the master_val to the dictionary under the key
+                # Add to the dictionary
                 if key not in data_dict:
                     data_dict[key] = arcpy.Array()
-                data_dict[key].add(master_val.centroid)  
+                data_dict[key].add(master_val.centroid)
 
-    # Fix this to work with existing
-    line_gdb = os.path.join(project_folder, 'Default.gdb')
-    line_shp = os.path.join(line_gdb, 'PolylineLayer')
-
-    # Set the workspace to the geodatabase containing the feature class
-    arcpy.env.workspace = line_gdb
-    
-    mainfileFID_arr = sorted(mainfileFID_arr) 
+    # Insert the polylines into the feature class
+    line_shp = os.path.join(gdb, 'PolylineLayer')
+    arcpy.env.workspace = gdb
     count = 0
+
     with arcpy.da.InsertCursor(line_shp, ["SHAPE@", "FID"]) as cursor:
         for key, val in data_dict.items():
-            # Create a polyline geometry
             polyline = arcpy.Polyline(val, spatial_reference)
-            # Insert the new polyline into the feature class
             cursor.insertRow([polyline, mainfileFID_arr[count]])
             count += 1
+
+    # Cleanup and finalize
     cleanup(10)
     print('done_main_file')
+
 
 
 
