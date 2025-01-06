@@ -765,7 +765,6 @@ if __name__ == "__main__":
     
     # Create necessary folders and geodatabases
     holderFolder()
-    create_lidargdb()
 
     # Generate random number and get spatial information
     singlepart_rand = random.randint(1, 99999)
