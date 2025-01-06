@@ -155,7 +155,6 @@ def holderFolder():
         # Optionally, save the layer to the geodatabase
         arcpy.CopyFeatures_management(temp_layer, grit_layer)
         print("Feature layer copied to the geodatabase.")
-
     return
 
 def delete_sj():
@@ -181,9 +180,6 @@ def delete_sj():
 
 @time_it
 def spatial_join():
-    
-    arcpy.env.addOutputsToMap = False
-    
     db = os.path.join(project_folder, "Default.gdb")
     target_features = os.path.join(db, "PointLayer")
     
@@ -195,8 +191,7 @@ def spatial_join():
         os.makedirs(output_folder)
     
     output_features = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
-    
-    
+       
     field_mappings = arcpy.FieldMappings()
 
     # Add the FID field from Extract_temp
