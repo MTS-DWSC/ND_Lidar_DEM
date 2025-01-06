@@ -96,6 +96,8 @@ def get_sp():
 
 def holderFolder():
     # Create the join folder
+    project = arcpy.mp.ArcGISProject("CURRENT")
+    project_folder = os.path.dirname(project.filePath)
     folder = "HolderFolder"
     dest = os.path.join(project_folder, folder)
     if not os.path.exists(dest):
