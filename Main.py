@@ -114,14 +114,35 @@ def create_lidargdb():
 
 
 def holderFolder():
+
+    # Create the join folder
     folder = "HolderFolder"
     dest = os.path.join(project_folder, folder)
     if not os.path.exists(dest):
         os.makedirs(dest)
-        
+
+    # Create folder to house each half of the mask
     lidar_gdb_path = os.path.join(project_folder, 'lidar.gdb')
     if not arcpy.Exists(lidar_gdb_path):
         arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
+
+    # Grab data source from API
+    grit_layer = os.path.join(gdb, "GRIT_Minor_Structures")
+    if arcpy.Exists(grit_layer):
+        return
+    else:
+        # URL of the REST service
+        service_url = "https://dotsc.ugpti.ndsu.nodak.edu:6443/arcgis/rest/services/GRIT_all/grit20_bridges_all_feature/MapServer/"
+    
+        # Define the name of the layer you want to extract
+        layer_name = "GRIT_Minor_Structures"
+    
+        # Create a temporary layer from the REST service
+        temp_layer = "in_memory/GRIT_Minor_Structures"
+    
+        # Add the REST service layer to the temporary layer
+        arcpy.MakeFeatureLayer_management(service_url + "0", temp_layer)  # Adjust the index if needed
+
 
     return
 
@@ -789,6 +810,8 @@ if __name__ == "__main__":
 
     # Get the folder containing the ArcGIS Pro project
     project_folder = os.path.dirname(project.filePath)
+
+    gdb = os.path.join(project_folder, 'Default.gdb')
     
     x, sjo_Number = get_sp() 
     sjo_Number += 1
