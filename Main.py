@@ -118,7 +118,6 @@ def holderFolder():
             # Extract the ZIP file
             with zipfile.ZipFile(io.BytesIO(response.content)) as z:
                 z.extractall(project_folder)  
-            print("ZIP file downloaded and extracted successfully.")
         else:
             print(f"Failed to download the file. Status code: {response.status_code}")
     else:
@@ -127,7 +126,6 @@ def holderFolder():
     # Grab data source from API
     grit_layer = os.path.join(lidar_gdb_path, "GRIT_Minor_Structures")
     if arcpy.Exists(grit_layer):
-        print("GRIT_Minor_Structures already exists in the geodatabase.")
         return
     else:
         # URL of the REST service
