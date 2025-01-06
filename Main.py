@@ -109,24 +109,25 @@ def get_sp():
 
 
 def holderFolder():
-
     # Create the join folder
     folder = "HolderFolder"
     dest = os.path.join(project_folder, folder)
     if not os.path.exists(dest):
         os.makedirs(dest)
-
-    # Create folder to house each half of the mask
+        print(f"Folder created at {dest}")
+    
+    # Create folder to house the geodatabase
     lidar_gdb_path = os.path.join(project_folder, 'lidar.gdb')
     if not arcpy.Exists(lidar_gdb_path):
         arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
+        print("File geodatabase created.")
 
     # URL to the raw ZIP file
     url = "https://github.com/MTS-DWSC/ND_Lidar_DEM/raw/main/ND_Index.zip"
-    check_file = os.path.join(project_folder, 'ND_Index.shp'
+    check_file = os.path.join(project_folder, 'ND_Index.shp')
     
     if not os.path.exists(check_file):
-        response = requests.get(url, verify = False)
+        response = requests.get(url, verify=False)
         if response.status_code == 200:
             # Extract the ZIP file
             with zipfile.ZipFile(io.BytesIO(response.content)) as z:
@@ -134,21 +135,27 @@ def holderFolder():
             print("ZIP file downloaded and extracted successfully.")
         else:
             print(f"Failed to download the file. Status code: {response.status_code}")
-            
+    else:
+        print(f"{check_file} already exists.")
+
     # Grab data source from API
-    grit_layer = os.path.join(gdb, "GRIT_Minor_Structures")
+    grit_layer = os.path.join(lidar_gdb_path, "GRIT_Minor_Structures")
     if arcpy.Exists(grit_layer):
+        print("GRIT_Minor_Structures already exists in the geodatabase.")
         return
     else:
         # URL of the REST service
-        service_url = "https://dotsc.ugpti.ndsu.nodak.edu:6443/arcgis/rest/services/GRIT_all/grit20_bridges_all_feature/MapServer/"
-    
-        # Define the name of the layer you want to extract
-        layer_name = "GRIT_Minor_Structures"
-    
+        service_url = "https://dotsc.ugpti.ndsu.nodak.edu:6443/arcgis/rest/services/GRIT_all/grit20_bridges_all_feature/MapServer/0"
+        
         # Create a temporary layer from the REST service
         temp_layer = "in_memory/GRIT_Minor_Structures"
-        arcpy.MakeFeatureLayer_management(service_url + "0", temp_layer)
+        arcpy.MakeFeatureLayer_management(service_url, temp_layer)
+        print("Feature layer created from the REST service.")
+
+        # Optionally, save the layer to the geodatabase
+        arcpy.CopyFeatures_management(temp_layer, grit_layer)
+        print("Feature layer copied to the geodatabase.")
+
     return
 
 def delete_sj():
