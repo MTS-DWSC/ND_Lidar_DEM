@@ -54,7 +54,6 @@ def check_sqlite():
         Y_LOCATION REAL
     )
     """)
-    #print(f"SQLite database and table are ready at: {output_file}")
     conn.close()
     return    
 
@@ -147,7 +146,7 @@ def delete_sj():
         file_path = os.path.join(output_folder, filename)
 
         if filename.endswith(".lock"):
-            continue  # Skip this file if it ends with .lock
+            continue 
         else:
             os.remove(file_path) 
             
@@ -156,7 +155,7 @@ def delete_sj():
         file_path = os.path.join(output_holder, filename)
 
         if filename.endswith(".lock"):
-            continue  # Skip this file if it ends with .lock
+            continue  
         else:
             os.remove(file_path) 
         
@@ -169,7 +168,6 @@ def spatial_join():
     
     join_features = project_folder + "\\" + "ND_Index.shp"
     
-    # Specify a valid output path, ensuring no invalid characters
     output_folder = os.path.join(project_folder, "SJO")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -185,11 +183,11 @@ def spatial_join():
     
     # Add the File ID field from Extract_temp
     fid_field_map = arcpy.FieldMap()
-    fid_field_map.addInputField(target_features, "MainFileID") # Change for ID
+    fid_field_map.addInputField(target_features, "MainFileID") 
     field_mappings.addFieldMap(fid_field_map)
     
     fid_field_map = arcpy.FieldMap()
-    fid_field_map.addInputField(target_features, "PL_Process") # Change for ID
+    fid_field_map.addInputField(target_features, "PL_Process")
     field_mappings.addFieldMap(fid_field_map)
 
     # Add the Tilename field from IndexLidar
@@ -220,8 +218,7 @@ def get_df(text):
     project = arcpy.mp.ArcGISProject("CURRENT")
     output_folder = os.path.join(project_folder, "SJO")
     fp = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
-    
-    #switch = 0
+
     rows = []
     switch = 1
     if switch == 1:
@@ -246,7 +243,6 @@ def populate_folder(df_ret):
         output_file = os.path.join(project_folder, "output_file.db")
         conn = sqlite3.connect(output_file)
         cursor = conn.cursor()
-        #df_ret = get_df("SpatialJoin_Output")
 
         arr = df_ret['FID_ID']
         results_arr = []
@@ -295,7 +291,7 @@ def populate_folder(df_ret):
         conn.close()
         
 
-## Not looping through it
+## Not implemented in main, breaks raster when converting to hillshade
 @time_it
 def raster_crs_conversion():
     arcpy.env.addOutputsToMap = False
@@ -305,7 +301,7 @@ def raster_crs_conversion():
     spatial_ref = arcpy.SpatialReference(4326)
     # -- Define the output folder --
     output_folder = os.path.join(project_folder, "Projected")
-    os.makedirs(output_folder, exist_ok=True)  # Ensure the output folder exists
+    os.makedirs(output_folder, exist_ok=True)  
     for file in os.listdir(fp):
         full_path = os.path.join(fp, file)
         # -- Check if the file is a valid raster --
@@ -315,14 +311,11 @@ def raster_crs_conversion():
             out_raster = os.path.join(output_folder, f"{fn}.tif")
         try:
             # -- Project the raster --
-            #arcpy.management.ProjectRaster(full_path, out_raster, spatial_ref)
             temp_projected_raster = arcpy.management.ProjectRaster(full_path, "in_memory/temp_projected", spatial_ref)
             exaggerated_dem = Times(temp_projected_raster, 1.5)
 
             # -- Save the exaggerated DEM --
             exaggerated_dem.save(out_raster)
-
-            #print(f"Projected: {fn} to {spatial_ref.name}")
         except Exception as e:
             print(f"Error processing {full_path}: {e}")
     print("Finished CRS conversion.")
@@ -333,9 +326,8 @@ def convert_crs(name):
     fp = check_gdb()
     fp_split = fp.split('\\')[:-1]
     fp_converted = '\\'.join(fp_split) + '\\' + 'Hillshade_Converted'
-    #print(os.listdir(fp))
     
-    dataset = name  # Fully qualify or adjust as needed
+    dataset = name  
     spatial_ref = arcpy.Describe(dataset).spatialReference
     count = 0
     
@@ -349,7 +341,6 @@ def convert_crs(name):
         if arcpy.Describe(full_path).datatype == 'RasterDataset':
             in_raster = full_path
             out_hillshade = Hillshade(in_raster)
-            #out_hillshade = Hillshade(in_raster, model_shadows = "SHADOWS", altitude = 38)
             
             output_name = f"{file_name}_Hillshade.tif"
             output_path = os.path.join(fp_converted, output_name)
@@ -564,7 +555,6 @@ def mask_extraction():
     conn.close()
 
     sorted_filepaths = dict(sorted(filepaths.items()))
-    #print(sorted_filepaths)
     for key, val in sorted_filepaths.items():
         if arcpy.Exists(val):
 
@@ -594,7 +584,6 @@ def mask_extraction():
             mask_1 = ExtractByMask(data_source, filtered_layerA, "INSIDE")
             mask_2 = ExtractByMask(data_source, filtered_layerB, "INSIDE")
             subfolder_path = os.path.join(project_folder, "lidar.gdb")
-            #os.makedirs(subfolder_path, exist_ok=True)
 
             mask_1.save(os.path.join(subfolder_path, filtered_layerA))
             mask_2.save(os.path.join(subfolder_path, filtered_layerB))
@@ -686,11 +675,9 @@ def working_copy():
     numpy_array = arcpy.da.TableToNumPyArray(fp2, cols)
     df = pd.DataFrame(numpy_array)
 
-
     geo_arr = []
     id_arr = []
     FID = []
-
 
     sp = input("Please input number to process: ")
     count, max_processed = get_sp() 
@@ -699,14 +686,9 @@ def working_copy():
 
     itter = count 
     print(itter, count, end)
-    #print(df.iloc[0])
     for index, val in df.iloc[count-1:end-1].iterrows():
-        #if itter == end:
-        #    break
-
         geo = val['SHAPE@']
         id_inst = val['Id']
-        #print(id_inst)
         x = geo.centroid.X
         y = geo.centroid.Y
         point = arcpy.Point(x,y)
@@ -714,8 +696,6 @@ def working_copy():
         id_arr.append(id_inst)
         FID.append(itter)
         itter += 1
-
-
 
     arcpy.env.workspace = db 
 
