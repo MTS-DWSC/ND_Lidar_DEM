@@ -10,6 +10,7 @@ from arcpy.sa import ExtractByMask
 import time
 import random
 import sys
+import io
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -106,12 +107,6 @@ def get_sp():
     conn.close()
     return  [max_fid, max_processed]
 
-def create_lidargdb():
-    lidar_gdb_path = os.path.join(project_folder, 'lidar.gdb')
-
-    if not arcpy.Exists(lidar_gdb_path):
-        arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
-
 
 def holderFolder():
 
@@ -126,6 +121,20 @@ def holderFolder():
     if not arcpy.Exists(lidar_gdb_path):
         arcpy.CreateFileGDB_management(project_folder, 'lidar.gdb')
 
+    # URL to the raw ZIP file
+    url = "https://github.com/MTS-DWSC/ND_Lidar_DEM/raw/main/ND_Index.zip"
+    check_file = os.path.join(project_folder, 'ND_Index.shp'
+    
+    if not os.path.exists(check_file):
+        response = requests.get(url, verify = False)
+        if response.status_code == 200:
+            # Extract the ZIP file
+            with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+                z.extractall(project_folder)  
+            print("ZIP file downloaded and extracted successfully.")
+        else:
+            print(f"Failed to download the file. Status code: {response.status_code}")
+            
     # Grab data source from API
     grit_layer = os.path.join(gdb, "GRIT_Minor_Structures")
     if arcpy.Exists(grit_layer):
@@ -139,11 +148,7 @@ def holderFolder():
     
         # Create a temporary layer from the REST service
         temp_layer = "in_memory/GRIT_Minor_Structures"
-    
-        # Add the REST service layer to the temporary layer
-        arcpy.MakeFeatureLayer_management(service_url + "0", temp_layer)  # Adjust the index if needed
-
-
+        arcpy.MakeFeatureLayer_management(service_url + "0", temp_layer)
     return
 
 def delete_sj():
