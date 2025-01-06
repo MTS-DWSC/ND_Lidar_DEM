@@ -24,8 +24,6 @@ def time_it(func):
 
 
 def check_gdb():
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
     check_file = os.path.join(project_folder, "Hold_DEMs")
     make_file = os.path.join(project_folder, "Hillshade_Converted")
 
@@ -36,12 +34,6 @@ def check_gdb():
     return check_file
 
 def check_sqlite():
-    # Get the current ArcGIS Pro project
-    project = arcpy.mp.ArcGISProject("CURRENT")
-
-    # Get the folder containing the ArcGIS Pro project
-    project_folder = os.path.dirname(project.filePath)
-
     # Define the path for the SQLite database file
     output_file = os.path.join(project_folder, "output_file.db")
 
@@ -68,12 +60,6 @@ def check_sqlite():
 
 def get_sp():
     check_sqlite()
-    # Get the current ArcGIS Pro project
-    project = arcpy.mp.ArcGISProject("CURRENT")
-
-    # Get the folder containing the ArcGIS Pro project
-    project_folder = os.path.dirname(project.filePath)
-    
     db = os.path.join(project_folder, "Default.gdb")
 
     PL = os.path.join(db, "PointLayer")
@@ -256,8 +242,6 @@ def get_df(text):
 @time_it
 def populate_folder(df_ret): 
     destination_folder = check_gdb()
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
     hs_folder = os.path.join(project_folder, 'Hillshade_Converted')
     check_file = project_folder + "\\" + "output_file.db"
     if os.path.exists(check_file):
@@ -275,10 +259,6 @@ def populate_folder(df_ret):
             results_arr.append(row[0])
         missing_fids = [fid for fid in arr if fid not in results_arr]
     
-        #xconn = open_connection()[1]
-        #xcursor = open_connection()[0]
-        project = arcpy.mp.ArcGISProject("CURRENT")
-        project_folder = os.path.dirname(project.filePath)
         output_file = os.path.join(project_folder, "output_file.db")
         conn = sqlite3.connect(output_file)
         cursor = conn.cursor()
@@ -321,8 +301,6 @@ def populate_folder(df_ret):
 @time_it
 def raster_crs_conversion():
     arcpy.env.addOutputsToMap = False
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
     fp = os.path.join(project_folder, "Hold_DEMs")
     count = 0
     # -- Specify the reference dataset for spatial reference --
@@ -389,17 +367,14 @@ def convert_crs(name):
 def process_geospatial_data(buffer_distance="50 Meters"):
     # Access the current project and workspace
     attempt, max_tries = 0, 3
-    aprx = arcpy.mp.ArcGISProject("CURRENT")
-    current_project_path = aprx.filePath
-    directory = os.path.dirname(current_project_path)
-    path = os.path.join(directory, "HolderFolder")
-    gdb_path = os.path.join(directory, "default.gdb")
+    path = os.path.join(project_folder, "HolderFolder")
+    gdb_path = os.path.join(project_folder, "default.gdb")
 
     # Ensure workspace is set
-    arcpy.env.workspace = directory
+    arcpy.env.workspace = project_folder
 
     # SQLite database connection
-    output_file = os.path.join(directory, "output_file.db")
+    output_file = os.path.join(project_folder, "output_file.db")
     conn = sqlite3.connect(output_file)
     cursor = conn.cursor()
 
@@ -527,8 +502,6 @@ def group_tracker(total_groups):
     return result
 
 def get_ids():
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
     output_file = os.path.join(project_folder, "output_file.db")
 
     # Connect to the SQLite database
@@ -573,9 +546,6 @@ def get_FIDS(shapefile_path, number):
 
 @time_it
 def mask_extraction():
-    # Set up project and directories
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
     output_file = os.path.join(project_folder, "output_file.db")
     folder = "HolderFolder"
     dest = os.path.join(project_folder, folder)
@@ -638,10 +608,6 @@ def mask_extraction():
 
 @time_it
 def convert_shp():
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
-    
-    # Define the geodatabase and output folder
     gdb_path = os.path.join(project_folder, 'lidar.gdb')
     output_folder = os.path.join(project_folder, 'ConvertedSHP')
 
@@ -677,7 +643,6 @@ def convert_shp():
 def get_id_sjo(key):
     sr = arcpy.SpatialReference(4326)
     id = int(key)
-    aprx = arcpy.mp.ArcGISProject("CURRENT")
     output_folder = os.path.join(project_folder, "SJO")
     fp = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
     cols = ['TARGET_FID', 'SHAPE@', 'FID_ID']
@@ -690,7 +655,6 @@ def get_id_sjo(key):
     y = cell.centroid.Y
     point = arcpy.Point(x, y)
     geom = arcpy.PointGeometry(point, sr)
-    #print(point)
     return geom
 
 
@@ -718,10 +682,6 @@ def cleanup(count: int) -> None:
 
 def working_copy():
     sr = arcpy.SpatialReference(4326)
-    arcpy.env.addOutputsToMap = False
-
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
     db = os.path.join(project_folder, "Default.gdb")
 
     for map in project.listMaps():
@@ -921,7 +881,6 @@ if __name__ == "__main__":
             count += 1
     cleanup(10)
     print('done_main_file')
-
 
 
 
