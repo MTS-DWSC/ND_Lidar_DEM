@@ -279,12 +279,12 @@ def populate_folder(df_ret):
                         print(f"{file_name} processed...")
                 cursor.execute("""
                     INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, X_LOCATION, Y_LOCATION, DateTimeAdded)
-                    VALUES (?, ?, ?, ?, ?,?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?,?, ?, ?, ?)
                 """, (int(lookup['FID_ID'].iloc[0]) - 0, lookup['TILENAME'].iloc[0], fn_final, res, int(lookup['PL_Process'].iloc[0]), int(lookup['MainFileID'].iloc[0]), lookup['X_LOCATION'].iloc[0], lookup['Y_LOCATION'].iloc[0], current_timestamp))
             except Exception as e:
                 cursor.execute("""
-                    INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, X_LOCATION, Y_LOCATION)
-                    VALUES (?, ?, ?, ?, ?,?, ?, ?)
+                    INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, X_LOCATION, Y_LOCATION, DateTimeAdded)
+                    VALUES (?, ?, ?, ?, ?,?, ?, ?, ?)
                 """, (int(lookup['FID_ID'].iloc[0]) - 0, lookup['TILENAME'].iloc[0], "Invalid", "Invalid", int(lookup['PL_Process'].iloc[0]), int(lookup['MainFileID'].iloc[0]), lookup['X_LOCATION'].iloc[0], lookup['Y_LOCATION'].iloc[0], current_timestamp))
                 print(f"An unexpected error occurred for {file_name}: {e}. Skipping...")
                 continue
