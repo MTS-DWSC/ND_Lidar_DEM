@@ -12,6 +12,7 @@ import random
 import sys
 import io
 from datetime import datetime
+from pathlib import Path
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -133,8 +134,8 @@ def holderFolder():
         
         # Create a temporary layer from the REST service
         temp_layer = "in_memory/GRIT_Minor_Structures"
-        arcpy.MakeFeatureLayer_management(service_url, temp_layer)
-        print("Feature layer created from the REST service.")
+        #arcpy.MakeFeatureLayer_management(service_url, temp_layer)
+        #print("Feature layer created from the REST service.")
 
         # Optionally, save the layer to the geodatabase
         arcpy.CopyFeatures_management(temp_layer, grit_layer)
@@ -325,32 +326,35 @@ def raster_crs_conversion():
 @time_it
 def convert_crs(name):
     fp = check_gdb()
-    fp_split = fp.split('\\')[:-1]
-    fp_converted = '\\'.join(fp_split) + '\\' + 'Hillshade_Converted'
-    
-    dataset = name  
-    spatial_ref = arcpy.Describe(dataset).spatialReference
+    fp_converted = Path(fp).parent / 'Hillshade_Converted'
+    #fp_converted.mkdir(parents=True, exist_ok=True)
+
+    spatial_ref = arcpy.Describe(name).spatialReference
     count = 0
-    
-    new_fp = os.path.join(project_folder, 'Hold_DEMs')
-    
-    
-    for file in os.listdir(new_fp):
-        file_name, file_extension = os.path.splitext(file)
-        full_path = os.path.join(new_fp, file)
-        # -- Check if the file is a valid raster --
-        if arcpy.Describe(full_path).datatype == 'RasterDataset':
-            in_raster = full_path
-            out_hillshade = Hillshade(in_raster)
-            
-            output_name = f"{file_name}_Hillshade.tif"
-            output_path = os.path.join(fp_converted, output_name)
-            if os.path.exists(output_path):
-                continue
-            out_hillshade.save(output_path)
-            count += 1
-            if count % 5 == 0:
-                print(f"Processing complete for {output_name}")
+
+    new_fp = Path(project_folder) / 'Hold_DEMs'
+
+    for file in new_fp.iterdir():
+        if file.suffix.lower() in ['.tif', '.img', '.jpg', '.png']:  
+            try:
+                if arcpy.Describe(str(file)).datatype == 'RasterDataset':
+                    in_raster = arcpy.Raster(str(file))
+                    out_hillshade = Hillshade(in_raster)
+                    
+                    output_name = f"{file.stem}_Hillshade.tif"
+                    output_path = fp_converted / output_name
+
+                    if output_path.exists():
+                        continue
+                    
+                    out_hillshade.save(str(output_path))
+                    count += 1
+                    
+                    if count % 5 == 0:
+                        print(f"Processing complete for {output_name}")
+
+            except Exception as e:
+                print(f"Error processing {file.name}: {e}")
     return
 
 @time_it
@@ -589,10 +593,9 @@ def mask_extraction():
 
             mask_1.save(os.path.join(subfolder_path, filtered_layerA))
             mask_2.save(os.path.join(subfolder_path, filtered_layerB))
-            count += 1
             if count % 5 == 0:
                 print(f"Mask Extraction: {filtered_layerA} and {filtered_layerB}.")
-
+            count += 1
 
 @time_it
 def convert_shp():
@@ -650,6 +653,10 @@ def cleanup(count: int) -> None:
     ConvertedSHP = os.path.join(project_folder, 'ConvertedSHP')
     Hold_DEMs = os.path.join(project_folder, 'Hold_DEMs')
     HolderFolder = os.path.join(project_folder, 'HolderFolder')
+    shutil.rmtree(ConvertedSHP)
+    shutil.rmtree(Hold_DEMs)
+    delete_sj()
+    
     lidar_gdb = os.path.join(project_folder, 'lidar.gdb')
     arcpy.env.workspace = lidar_gdb
     datasets = arcpy.ListRasters()
@@ -662,10 +669,7 @@ def cleanup(count: int) -> None:
             if itter == count:
                 break
 
-        shutil.rmtree(ConvertedSHP)
-        shutil.rmtree(Hold_DEMs)
-        delete_sj()
-
+        
 def working_copy():
     sr = arcpy.SpatialReference(4326)
     db = os.path.join(project_folder, "Default.gdb")
@@ -734,7 +738,7 @@ def working_copy():
         for point, main_file_id, idf in zip(geo_arr, id_arr, FID):
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
-
+            
 if __name__ == "__main__":
     # Environment setup
     arcpy.env.overwriteOutput = True
@@ -821,9 +825,13 @@ if __name__ == "__main__":
                         master_val = end_point
 
                 # Add to the dictionary
-                if key not in data_dict:
-                    data_dict[key] = arcpy.Array()
-                data_dict[key].add(master_val.centroid)
+                try:
+                    if key not in data_dict:
+                        data_dict[key] = arcpy.Array()
+                    data_dict[key].add(master_val.centroid)
+                except Exception as e:
+                    arcpy.AddMessage(f"Centroid error, Hillshade cutoff for {key}: {e}")
+
 
     # Insert the polylines into the feature class
     line_shp = os.path.join(gdb, 'PolylineLayer')
