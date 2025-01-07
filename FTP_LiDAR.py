@@ -11,6 +11,7 @@ import time
 import random
 import sys
 import io
+from datetime import datetime
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -269,7 +270,7 @@ def populate_folder(df_ret):
                 res = 'ftp://swc:water@lidarftp.swc.nd.gov/' + lookup['ASCII_PATH'].iloc[0]
                 file_name = os.path.basename(res)
                 destination_path = os.path.join(destination_folder, file_name)
-                
+                current_timestamp = datetime.now()
                 if os.path.exists(check_fp):
                     print(f"{file_name} already exists. Skipping...")
                 else:
@@ -277,14 +278,14 @@ def populate_folder(df_ret):
                     if count % 5 == 0:
                         print(f"{file_name} processed...")
                 cursor.execute("""
-                    INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, X_LOCATION, Y_LOCATION)
+                    INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, X_LOCATION, Y_LOCATION, DateTimeAdded)
                     VALUES (?, ?, ?, ?, ?,?, ?, ?)
-                """, (int(lookup['FID_ID'].iloc[0]) - 0, lookup['TILENAME'].iloc[0], fn_final, res, int(lookup['PL_Process'].iloc[0]), int(lookup['MainFileID'].iloc[0]), lookup['X_LOCATION'].iloc[0], lookup['Y_LOCATION'].iloc[0]))
+                """, (int(lookup['FID_ID'].iloc[0]) - 0, lookup['TILENAME'].iloc[0], fn_final, res, int(lookup['PL_Process'].iloc[0]), int(lookup['MainFileID'].iloc[0]), lookup['X_LOCATION'].iloc[0], lookup['Y_LOCATION'].iloc[0], current_timestamp))
             except Exception as e:
                 cursor.execute("""
                     INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, X_LOCATION, Y_LOCATION)
                     VALUES (?, ?, ?, ?, ?,?, ?, ?)
-                """, (int(lookup['FID_ID'].iloc[0]) - 0, lookup['TILENAME'].iloc[0], "Invalid", "Invalid", int(lookup['PL_Process'].iloc[0]), int(lookup['MainFileID'].iloc[0]), lookup['X_LOCATION'].iloc[0], lookup['Y_LOCATION'].iloc[0]))
+                """, (int(lookup['FID_ID'].iloc[0]) - 0, lookup['TILENAME'].iloc[0], "Invalid", "Invalid", int(lookup['PL_Process'].iloc[0]), int(lookup['MainFileID'].iloc[0]), lookup['X_LOCATION'].iloc[0], lookup['Y_LOCATION'].iloc[0], current_timestamp))
                 print(f"An unexpected error occurred for {file_name}: {e}. Skipping...")
                 continue
         conn.commit()
