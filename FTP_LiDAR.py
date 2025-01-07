@@ -556,6 +556,7 @@ def mask_extraction():
     conn.close()
 
     sorted_filepaths = dict(sorted(filepaths.items()))
+    count = 0
     for key, val in sorted_filepaths.items():
         if arcpy.Exists(val):
 
@@ -588,7 +589,9 @@ def mask_extraction():
 
             mask_1.save(os.path.join(subfolder_path, filtered_layerA))
             mask_2.save(os.path.join(subfolder_path, filtered_layerB))
-            print(f"Mask Extraction: {filtered_layerA} and {filtered_layerB}.")
+            count += 1
+            if count % 5 == 0:
+                print(f"Mask Extraction: {filtered_layerA} and {filtered_layerB}.")
 
 
 @time_it
