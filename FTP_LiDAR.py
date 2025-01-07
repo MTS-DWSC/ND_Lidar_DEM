@@ -338,15 +338,13 @@ def convert_crs(name):
         if file.suffix.lower() in ['.tif', '.img', '.jpg', '.png']:  
             try:
                 if arcpy.Describe(str(file)).datatype == 'RasterDataset':
-                    in_raster = arcpy.Raster(str(file))
-                    out_hillshade = Hillshade(in_raster)
-                    
                     output_name = f"{file.stem}_Hillshade.tif"
                     output_path = fp_converted / output_name
-
                     if output_path.exists():
                         continue
-                    
+               
+                    in_raster = arcpy.Raster(str(file))
+                    out_hillshade = Hillshade(in_raster)
                     out_hillshade.save(str(output_path))
                     count += 1
                     
@@ -358,7 +356,7 @@ def convert_crs(name):
     return
 
 @time_it
-def process_geospatial_data(buffer_distance="50 Meters"):
+def process_geospatial_data(buffer_distance="35 Meters"):
     # Access the current project and workspace
     attempt, max_tries = 0, 3
     path = os.path.join(project_folder, "HolderFolder")
@@ -804,7 +802,7 @@ if __name__ == "__main__":
                 df = pd.DataFrame(numpy_array)
 
                 # Get the smallest gridcode values
-                df_sorted = df.nsmallest(n=30, columns=['gridcode'])
+                df_sorted = df.nsmallest(n=38, columns=['gridcode'])
 
                 # Process each point to find the closest one
                 start_point = get_id_sjo(key)
