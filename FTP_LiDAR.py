@@ -838,9 +838,15 @@ if __name__ == "__main__":
 
     with arcpy.da.InsertCursor(line_shp, ["SHAPE@", "FID"]) as cursor:
         for key, val in data_dict.items():
-            polyline = arcpy.Polyline(val, spatial_reference)
-            cursor.insertRow([polyline, mainfileFID_arr[count]])
-            count += 1
+            try:
+                # Try creating the polyline
+                polyline = arcpy.Polyline(val, spatial_reference)
+                cursor.insertRow([polyline, mainfileFID_arr[count]])
+            except Exception as e:
+                # If it fails, print the error and the value of val
+                arcpy.AddMessage(f"Error creating polyline for key {key} with value {val}: {e}")
+            finally:
+                count += 1
 
     # Cleanup and finalize
     cleanup(10)
