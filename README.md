@@ -1,10 +1,10 @@
-======================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~         AI Generated Readme        ~
 ~         Will update real one       ~
 ~         later.                     ~
 ~                                    ~
 ~                                    ~
-======================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 README: ArcPy Workflow for Geospatial Data Processing
 
 Overview
