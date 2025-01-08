@@ -144,6 +144,8 @@ def holderFolder():
 
 def delete_sj():
     output_folder = os.path.join(project_folder, "SJO")
+    shape_folder = os.path.join(project_folder, "ConvertedSHP")
+    holder_folder = os.path.join(project_folder, "HolderFolder")
     for filename in os.listdir(output_folder):
         file_path = os.path.join(output_folder, filename)
 
@@ -152,14 +154,21 @@ def delete_sj():
         else:
             os.remove(file_path) 
             
-    output_holder = os.path.join(project_folder, "HolderFolder")
-    for filename in os.listdir(output_holder):
-        file_path = os.path.join(output_holder, filename)
+    for filename in os.listdir(holder_folder):
+        file_path = os.path.join(holder_folder, filename)
 
         if filename.endswith(".lock"):
             continue  
         else:
             os.remove(file_path) 
+            
+    for filename in os.listdir(shape_folder):
+        file_path = os.path.join(shape_folder, filename)
+
+        if filename.endswith(".lock"):
+            continue  
+        else:
+            os.remove(file_path)
         
 
 
@@ -342,9 +351,12 @@ def convert_crs(name):
                     output_path = fp_converted / output_name
                     if output_path.exists():
                         continue
-               
+                        
                     in_raster = arcpy.Raster(str(file))
                     out_hillshade = Hillshade(in_raster)
+                    
+                    
+                    
                     out_hillshade.save(str(output_path))
                     count += 1
                     
@@ -413,10 +425,8 @@ def process_geospatial_data(buffer_distance="35 Meters"):
         try:
             # Attempt the operation
             arcpy.management.MultipartToSinglepart(erased_output, singlepart_output)
-            print("Operation succeeded")
-            break  # Exit the loop if successful
+            break  
         except arcpy.ExecuteError as e:
-            # If arcpy raises an error, catch it
             print(f"Error: {e}")
             attempt += 1
             if attempt < max_retries:
@@ -591,12 +601,16 @@ def mask_extraction():
 
             mask_1.save(os.path.join(subfolder_path, filtered_layerA))
             mask_2.save(os.path.join(subfolder_path, filtered_layerB))
+            count += 1
             if count % 5 == 0:
                 print(f"Mask Extraction: {filtered_layerA} and {filtered_layerB}.")
-            count += 1
+            
+    keys = sorted_filepaths.keys()
+    keys_list = list(keys)
+    return keys_list
 
 @time_it
-def convert_shp():
+def convert_shp(keys_list):
     gdb_path = os.path.join(project_folder, 'lidar.gdb')
     output_folder = os.path.join(project_folder, 'ConvertedSHP')
 
@@ -612,19 +626,22 @@ def convert_shp():
 
     if rasters:
         for raster in rasters:
-            try:
-                valid_raster_name = arcpy.ValidateTableName(raster, output_folder)
-                in_raster = os.path.join(gdb_path, raster)
-                output_shp = os.path.join(output_folder, f"{valid_raster_name}.shp")
+            if any(str(key) in raster for key in keys_list):
+                try:
+                    valid_raster_name = arcpy.ValidateTableName(raster, output_folder)
+                    in_raster = os.path.join(gdb_path, raster)
+                    output_shp = os.path.join(output_folder, f"{valid_raster_name}.shp")
 
-                arcpy.RasterToPolygon_conversion(
-                    in_raster=in_raster,
-                    out_polygon_features=output_shp,
-                    simplify="NO_SIMPLIFY",
-                    raster_field="Value"
-                )
-            except Exception as e:
-                print(f"Error converting {raster}: {e}")
+                    arcpy.RasterToPolygon_conversion(
+                        in_raster=in_raster,
+                        out_polygon_features=output_shp,
+                        simplify="NO_SIMPLIFY",
+                        raster_field="Value"
+                    )
+                except Exception as e:
+                    print(f"Error converting {raster}: {e}")
+            else:
+                continue
     else:
         print("No rasters found in the geodatabase.")
 
@@ -646,12 +663,12 @@ def get_id_sjo(key):
     geom = arcpy.PointGeometry(point, sr)
     return geom
 
-
-def cleanup(count: int) -> None:
+@time_it
+def cleanup(keys_list) -> None:
     ConvertedSHP = os.path.join(project_folder, 'ConvertedSHP')
     Hold_DEMs = os.path.join(project_folder, 'Hold_DEMs')
     HolderFolder = os.path.join(project_folder, 'HolderFolder')
-    shutil.rmtree(ConvertedSHP)
+    #shutil.rmtree(ConvertedSHP)
     shutil.rmtree(Hold_DEMs)
     delete_sj()
     
@@ -659,13 +676,14 @@ def cleanup(count: int) -> None:
     arcpy.env.workspace = lidar_gdb
     datasets = arcpy.ListRasters()
     itter = 0
-    if len(datasets) > count:
-        for data in datasets:
+    for data in datasets:
+        if any(str(key) in data for key in keys_list):
+            continue
+        else:
             fp = os.path.join(lidar_gdb, data)
             arcpy.Delete_management(fp)
             itter += 1
-            if itter == count:
-                break
+
 
         
 def working_copy():
@@ -737,6 +755,7 @@ def working_copy():
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
             
+            
 if __name__ == "__main__":
     # Environment setup
     arcpy.env.overwriteOutput = True
@@ -774,8 +793,8 @@ if __name__ == "__main__":
     correct_output()
     
     # Mask extraction and shapefile conversion
-    mask_extraction()
-    convert_shp()
+    keys_list = mask_extraction()
+    convert_shp(keys_list)
 
     # Prepare to process the shapefiles
     directory = os.path.join(project_folder, 'ConvertedSHP')
@@ -802,7 +821,7 @@ if __name__ == "__main__":
                 df = pd.DataFrame(numpy_array)
 
                 # Get the smallest gridcode values
-                df_sorted = df.nsmallest(n=38, columns=['gridcode'])
+                df_sorted = df.nsmallest(n=30, columns=['gridcode'])
 
                 # Process each point to find the closest one
                 start_point = get_id_sjo(key)
@@ -849,9 +868,8 @@ if __name__ == "__main__":
                 count += 1
 
     # Cleanup and finalize
-    cleanup(10)
+    cleanup(keys_list)
     print('done_main_file')
-
 
 
 
