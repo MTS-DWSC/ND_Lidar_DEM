@@ -715,7 +715,8 @@ def clean_hillshades():
         with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, _, files in os.walk(hillshade_holder):
                 for file in files:
-                    zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), hillshade_holder))
+                    if not file.endswith('.lock'): 
+                        zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), hillshade_holder))
 
         print(f"Moved {len(tif_files)} .tif files to {hillshade_holder} and zipped the folder to {zip_file_path}")
     else:
