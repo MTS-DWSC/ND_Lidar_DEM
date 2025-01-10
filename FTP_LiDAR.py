@@ -13,6 +13,7 @@ import sys
 import io
 from datetime import datetime
 from pathlib import Path
+import zipfile
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -684,7 +685,41 @@ def cleanup(keys_list) -> None:
             arcpy.Delete_management(fp)
             itter += 1
 
+def clean_hillshades():
+    hillshade_Con = os.path.join(project_folder, "Hillshade_Converted")
+    archive_folder = os.path.join(project_folder, "Archive")
 
+    # Get list of .tif files in hillshade_Con
+    tif_files = [f for f in os.listdir(hillshade_Con) if f.endswith('.tif')]
+
+    if len(tif_files) > 40:
+        # Get existing folders in archive_folder
+        existing_folders = [f for f in os.listdir(archive_folder) if os.path.isdir(os.path.join(archive_folder, f))]
+
+        # Extract indices from folders with the format hillshade_holder_X
+        indices = [int(f.split('_')[-1]) for f in existing_folders if f.startswith('hillshade_holder_') and f.split('_')[-1].isdigit()]
+
+        # Determine the next index
+        next_index = max(indices) + 1 if indices else 1
+
+        # Create new folder with the next index
+        hillshade_holder = os.path.join(archive_folder, f"hillshade_holder_{next_index}")
+        os.makedirs(hillshade_holder, exist_ok=True)
+
+        # Move all .tif files to hillshade_holder
+        for tif_file in tif_files:
+            shutil.move(os.path.join(hillshade_Con, tif_file), hillshade_holder)
+
+        # Zip the new folder
+        zip_file_path = f"{hillshade_holder}.zip"
+        with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(hillshade_holder):
+                for file in files:
+                    zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), hillshade_holder))
+
+        print(f"Moved {len(tif_files)} .tif files to {hillshade_holder} and zipped the folder to {zip_file_path}")
+    else:
+        pass
         
 def working_copy():
     sr = arcpy.SpatialReference(4326)
@@ -869,6 +904,7 @@ if __name__ == "__main__":
 
     # Cleanup and finalize
     cleanup(keys_list)
+    clean_hillshades()
     print('done_main_file')
 
 
