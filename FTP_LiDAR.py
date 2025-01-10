@@ -211,18 +211,50 @@ def spatial_join():
     ascii_path_field_map = arcpy.FieldMap()
     ascii_path_field_map.addInputField(join_features, "ASCII_Path")
     field_mappings.addFieldMap(ascii_path_field_map)
+    
+    # Make a layer from target_features
+    arcpy.management.MakeFeatureLayer(target_features, "target_layer")
+
+    # Select points in target_features that are within join_features
+    arcpy.management.SelectLayerByLocation(target_features, "WITHIN", join_features)
 
     # Perform the spatial join
     arcpy.analysis.SpatialJoin(
-        target_features=target_features,
+        target_features="target_layer",
         join_features=join_features,
         out_feature_class=output_features,
         join_type="KEEP_COMMON",  
         field_mapping=field_mappings
     )
-    arcpy.env.addOutputsToMap = False
-    print("done_spatial_join")
+    
+    # Check if the output_features is empty
+    count_result = arcpy.management.GetCount(output_features)
+    count = int(count_result.getOutput(0))
+    
+    if count == 0:
+        rows_list = []
+        with arcpy.da.SearchCursor("target_layer", ["FID_ID", "MainFileID", "PL_Process"]) as cursor:
+            for row in cursor:
+                rows_list.append(row)
+        df = pd.DataFrame(rows_list, columns=["FID_ID", "MainFileID", "PL_Process"])
+        
+        output_file = os.path.join(project_folder, "output_file.db")
+        conn = sqlite3.connect(output_file)
+        cursor = conn.cursor()
+        
+        print(f"printing df: {df}")
+        for index, row in df.iterrows():
+            #print(f"printing row: {row}")
+            cursor.execute("""
+                INSERT INTO recordManager (FID, File_name, File_path, FTP, Processed, MainFileID, DateTimeAdded)
+                VALUES (?, ?, ?, ?, ?,?, ?)
+            """, (int(row[0]) - 0, "Out of Bounds", "Out of Bounds", "Out of Bounds", int(row[2]), int(row[1]), current_timestamp))
+        conn.commit()
+        cursor.close()
+        sys.exit()
 
+    
+    
 
 
 def get_df(text):
@@ -281,7 +313,6 @@ def populate_folder(df_ret):
                 res = 'ftp://swc:water@lidarftp.swc.nd.gov/' + lookup['ASCII_PATH'].iloc[0]
                 file_name = os.path.basename(res)
                 destination_path = os.path.join(destination_folder, file_name)
-                current_timestamp = datetime.now()
                 if os.path.exists(check_fp):
                     print(f"{file_name} already exists. Skipping...")
                 else:
@@ -684,7 +715,8 @@ def cleanup(keys_list) -> None:
             fp = os.path.join(lidar_gdb, data)
             arcpy.Delete_management(fp)
             itter += 1
-
+            
+            
 def clean_hillshades():
     hillshade_Con = os.path.join(project_folder, "Hillshade_Converted")
     archive_folder = os.path.join(project_folder, "Archive")
@@ -692,19 +724,25 @@ def clean_hillshades():
     # Get list of .tif files in hillshade_Con
     tif_files = [f for f in os.listdir(hillshade_Con) if f.endswith('.tif')]
 
-    if len(tif_files) > 40:
+    if len(tif_files) > 50:
+        # Get existing folders in archive_folder
         existing_folders = [f for f in os.listdir(archive_folder) if os.path.isdir(os.path.join(archive_folder, f))]
 
+        # Extract indices from folders with the format hillshade_holder_X
         indices = [int(f.split('_')[-1]) for f in existing_folders if f.startswith('hillshade_holder_') and f.split('_')[-1].isdigit()]
 
+        # Determine the next index
         next_index = max(indices) + 1 if indices else 1
 
+        # Create new folder with the next index
         hillshade_holder = os.path.join(archive_folder, f"hillshade_holder_{next_index}")
         os.makedirs(hillshade_holder, exist_ok=True)
 
+        # Move all .tif files to hillshade_holder
         for tif_file in tif_files:
             shutil.move(os.path.join(hillshade_Con, tif_file), hillshade_holder)
 
+        # Zip the new folder
         zip_file_path = f"{hillshade_holder}.zip"
         with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, _, files in os.walk(hillshade_holder):
@@ -712,9 +750,10 @@ def clean_hillshades():
                     if not file.endswith('.lock'): 
                         zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), hillshade_holder))
 
-        print(f"Moved {len(tif_files)} .tif files to {hillshade_holder}.")
+        print(f"Moved {len(tif_files)} .tif files to {hillshade_holder} and zipped the folder to {zip_file_path}")
     else:
         pass
+
         
 def working_copy():
     sr = arcpy.SpatialReference(4326)
@@ -788,6 +827,7 @@ def working_copy():
             
 if __name__ == "__main__":
     # Environment setup
+    current_timestamp = datetime.now()
     arcpy.env.overwriteOutput = True
     arcpy.env.addOutputsToMap = False
 
@@ -899,8 +939,7 @@ if __name__ == "__main__":
 
     # Cleanup and finalize
     cleanup(keys_list)
-    clean_hillshades()
+    #clean_hillshades()
     print('done_main_file')
-
 
 
