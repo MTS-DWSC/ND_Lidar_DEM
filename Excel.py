@@ -3,14 +3,15 @@ import pandas as pd
 import numpy as np
 import os
 
-# Define the spatial reference
-sr = arcpy.SpatialReference(4326)
-
 # Function to extract X, Y coordinates
 def extract_coordinates(shape):
     # Project the shape to WGS 84 (EPSG 4326) if needed
     projected_shape = shape.projectAs(sr)
     return projected_shape.centroid.X, projected_shape.centroid.Y
+
+
+# Define the spatial reference
+sr = arcpy.SpatialReference(4326)
 
 for map in project.listMaps():
     for layer in map.listLayers():
@@ -77,8 +78,14 @@ with arcpy.da.InsertCursor(feature_class_name, ["Id", "SHAPE@"]) as cursor:
 
 print(f"PolyPoint shapefile created at {os.path.join(gdb, feature_class_name)}")
 
+
+# ------------------------------------
+
 # Paths to your input feature classes
-poly_point_fc = os.path.join(gdb, "PolyPointLayer_Buffer")  # PolyPoint feature class
+project = arcpy.mp.ArcGISProject("CURRENT")
+project_folder = os.path.dirname(project.filePath)
+gdb = os.path.join(project_folder, 'Default.gdb')
+poly_point_fc = os.path.join(gdb, "PolyPointLayer_Buffer1")  # PolyPoint feature class
 buffer_fc = "Joined_Roads_Buffer"  # The buffer feature class
 
 # Output paths for the spatial join result and the two output shapefiles
@@ -122,9 +129,10 @@ arcpy.management.CopyFeatures(spatial_join_layer, non_intersecting_output)
 print(f"Intersecting points saved to {intersecting_output}")
 print(f"Non-intersecting points saved to {non_intersecting_output}")
 
-
+# ------------------------------------------
+sr = arcpy.SpatialReference(4326)
 cols_df = ['OBJECTID', 'SHAPE@']
-
+cols = ['Id', 'SHAPE@']
 nip = os.path.join(gdb, "NonIntersectingPoints")
 ip = os.path.join(gdb, "IntersectingPoints")
 default = os.path.join(gdb, "PolyPointLayer")
@@ -161,13 +169,27 @@ df.to_excel(output_excel_path, index=False)
 print(df.head())
 
 default = os.path.join(project_folder, "IP_PointLayer.xlsx")
+print('done')
 
+# -------------------------------------------------------------
 # Read the Excel file into a DataFrame
-df = pd.read_excel(default)
+output_excel_path_ip = os.path.join(project_folder, "IP_PointLayer.xlsx")
+df = pd.read_excel(output_excel_path_ip)
 
 # Extract only the 'Id' column
 df_id_only = df[['Id']]
 
 print(df_id_only)
 
-# Where clause in formation for only these ids
+for map in project.listMaps():
+    for layer in map.listLayers():
+        if layer.name == "GRIT_Minor_Structures":
+            fp2 = layer.dataSource
+            break
+
+cols = ['Id', 'SHAPE@']
+numpy_array = arcpy.da.TableToNumPyArray(fp2, cols)
+df = pd.DataFrame(numpy_array)
+filtered_df = df[df['Id'].isin(df_id_only['Id'])]
+print(filtered_df)
+
