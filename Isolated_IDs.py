@@ -21,18 +21,16 @@ def get_id_sjo(key):
     return geom
   
 def extract_coordinates(shape):
-    # Project the shape to WGS 84 (EPSG 4326) if needed
     sr = arcpy.SpatialReference(4326)
     projected_shape = shape.projectAs(sr)
     point = arcpy.Point(projected_shape.centroid.X, projected_shape.centroid.Y)
-    geom = arcpy.PointGeometry(point, sr)
-    return geom
+    return point
+project = arcpy.mp.ArcGISProject("CURRENT")
+project_folder = os.path.dirname(project.filePath)
 
 key = 999
 get_id_sjo(key)
 
-project = arcpy.mp.ArcGISProject("CURRENT")
-project_folder = os.path.dirname(project.filePath)
 folder = os.path.join(project_folder, 'ConvertedSHP')
 file = os.path.join(folder, 'Group_999_FID_1996.shp')
 
@@ -52,25 +50,6 @@ print(filtered_df.head())
 
 # ----
 
-#Rank column
-
-output_file = os.path.join(project_folder, "output_file.db")
-
-# Connect to the SQLite database
-conn = sqlite3.connect(output_file)
-
-cursor = conn.cursor()
-
-cursor.execute("SELECT X_LOCATION, Y_LOCATION FROM recordManager WHERE MainFileID = '2147';")
-result = cursor.fetchone()
-print(result)
-conn.close()
-
-# ----
-
-key = 999
-
-
 directory = os.path.join(project_folder, 'ConvertedSHP')
 file_desc = os.path.join(project_folder, f'SJO/SpatialJoin_Output119.shp')
 
@@ -82,7 +61,6 @@ start_point = get_id_sjo(key)
 min_dist = float('inf')
 master_val = None
 
-print(df_sorted.head())
 filtered_df['distance'] = 999
 
 for index, row in filtered_df.iterrows():
@@ -120,20 +98,36 @@ max_diff_row = surrounding_rows.loc[surrounding_rows['Id_diff'].idxmax()]
 # Extract the 'Id' value from that row
 furthest_id = max_diff_row['Id']
 index_of_row_end = sorted_df[sorted_df['Id'] == furthest_id].index[0]
+
 end_point = sorted_df.iloc[index_of_row_end]['SHAPE@']
 start_point = sorted_df.iloc[index_of_row_start]['SHAPE@']
+spoint = extract_coordinates(start_point)
+epoint = extract_coordinates(end_point)
+data_dict = {}
+array = arcpy.Array([spoint, epoint])
+line = arcpy.Polyline(array, sr)
+data_dict[999] = line
 
-print(index_of_row_end)
-#print(sorted_df.iloc[index_of_row_end])
-print(surrounding_rows)
-
-# ----
-
-end = extract_coordinates(end_point)
-start = extract_coordinates(start_point)
-distance = start.distanceTo(end)
-
-print(distance)
+output_fc = os.path.join(gdb,"testline")
+#arcpy.CopyFeatures_management(line, output_fc)
 
 
+id = 999
 
+project = arcpy.mp.ArcGISProject("CURRENT")
+project_folder = os.path.dirname(project.filePath)
+gdb = os.path.join(project_folder, 'Default.gdb')
+line_fin = os.path.join(gdb, "PolylineLayer")
+arcpy.env.workspace = gdb
+
+spatial_reference = arcpy.SpatialReference(4326)
+
+with arcpy.da.InsertCursor(line_fin, ["SHAPE@", "FID"]) as cursor:
+    for key, val in data_dict.items():
+        try:
+            cursor.insertRow([val, key])
+            print('Inserted.')
+        except Exception as e:
+            print(f"Error creating polyline for key {key} with value {val}: {e}")
+
+print('done')
