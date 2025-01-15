@@ -118,6 +118,8 @@ print(filtered_df)
 # Modify so it doesn't need erasure
 
 # Get the gridcode value for that row
+min_distance_index = filtered_df['distance'].idxmin()
+
 min_distance_gridcode = filtered_df.at[min_distance_index, 'gridcode']
 
 # Now, filter the dataframe to only rows with that gridcode value
