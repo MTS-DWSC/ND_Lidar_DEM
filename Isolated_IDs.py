@@ -168,3 +168,36 @@ for filename in os.listdir(directory):
             
 print(sorted_df)     
 print('done')             
+
+
+
+"""
+start_point = sorted_df.iloc[index_of_row_start]['SHAPE@']
+centroid_geom = arcpy.PointGeometry(start_point.centroid, start_point.spatialReference)
+projected_centroid = centroid_geom.projectAs(spatial_reference)
+point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
+sp_point = arcpy.PointGeometry(point, spatial_reference)
+spoint = extract_coordinates(start_point)
+
+for index, row in surrounding_rows.iterrows():
+    cell = row['SHAPE@']
+    centroid_geom = arcpy.PointGeometry(cell.centroid, cell.spatialReference)
+    projected_centroid = centroid_geom.projectAs(spatial_reference)
+
+    point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
+    end_point = arcpy.PointGeometry(point, spatial_reference)
+
+    distance = sp_point.distanceTo(end_point)
+    surrounding_rows.at[index, 'distance_end_point'] = distance
+
+print(surrounding_rows[['Id', 'gridcode', 'distance', 'distance_end_point']])
+
+# Sort by 'distance to the point centered around' (Column A) in ascending order
+sorted_df = surrounding_rows.sort_values(by='distance', ascending=True)
+
+# Further sort by 'distance to the point looking at' (Column B) in descending order
+sorted_df = surrounding_rows.sort_values(by='distance_end_point', ascending=False)
+
+print(sorted_df[['Id', 'gridcode', 'distance', 'distance_end_point']])
+
+"""
