@@ -1,216 +1,78 @@
-import arcpy
-import pandas as pd
-import os
-import numpy as np
-import sqlite3
-
-def get_id_sjo(key):
-    sr = arcpy.SpatialReference(4326)
-    id = int(key)
-    sfj = 14090
-    output_folder = os.path.join(project_folder, "SJO")
-    fp = os.path.join(output_folder, f"SpatialJoin_Output{1}.shp")
-    cols = ['TARGET_FID', 'SHAPE@', 'FID_ID']
-    numpy_array = arcpy.da.TableToNumPyArray(fp, cols)
-    df = pd.DataFrame(numpy_array)
-    df_filter = df[df['FID_ID'] == id]
-
-    cell = df_filter.iloc[0, 1]
-    x = cell.centroid.X
-    y = cell.centroid.Y
-    point = arcpy.Point(x, y)
-    geom = arcpy.PointGeometry(point, sr)
-    return geom
-  
 def extract_coordinates(shape):
     sr = arcpy.SpatialReference(4326)
     projected_shape = shape.projectAs(sr)
     point = arcpy.Point(projected_shape.centroid.X, projected_shape.centroid.Y)
     return point
 
-def get_ids():
-    output_file = os.path.join(project_folder, "output_file.db")
+def get_central_points(id_key):
+    id_key = int(id_key)
+    output_folder = os.path.join(project_folder, "SJO")
+    fp = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
+    central_point_coords = None
 
-    # Connect to the SQLite database
-    conn = sqlite3.connect(output_file)
-    cursor = conn.cursor()
+    with arcpy.da.SearchCursor(fp, ["SHAPE@", "FID_ID"]) as cursor:
+        for row in cursor:
+            if row[1] == id_key:
+                point_geom = row[0]  # Geometry from SHAPE@
+                point_geom_sr_4326 = point_geom.projectAs(sr_4326)
+                central_point_coords = (point_geom_sr_4326.centroid.X, point_geom_sr_4326.centroid.Y)
+                break
+    return central_point_coords
 
-    # Retrieve FID and file paths from the database
-    query = """
-    SELECT FID, File_path, MainFileID
-    FROM recordManager 
-    WHERE Processed = (SELECT MAX(Processed) FROM recordManager)
-    AND FTP != 'Invalid';
-    """
 
-    arr_FID = []
-    filepaths = []
-    MFID = []
-    for row in cursor.execute(query):
-        arr_FID.append(row[0])
-        filepaths.append(row[1])
-        MFID.append(row[2])
+def true_value():
+    
+    # -----------------------
+    cols = ['OID@', 'diss', 'SHAPE@']
+    numpy_array = arcpy.da.TableToNumPyArray('dissolved_output', cols)
+    df = pd.DataFrame(numpy_array)
+    dis_df = df[df['diss'] == 'True']
+    shape_value = dis_df['SHAPE@'].iloc[0]
+    centroid_geom = arcpy.PointGeometry(shape_value.centroid, shape_value.spatialReference)
+    projected_centroid = centroid_geom.projectAs(sr)
+    point_focus = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
+    to_start_focus = arcpy.PointGeometry(point_focus, sr)
+    # -----------------------
+    
+    arr = []
+    df['Eliminate'] = True
+    df['Distance_lookup'] = 0
+    df['Distance_central'] = 0
+    for index, row in df.iterrows():
+        cell = row['SHAPE@']
+        cg = arcpy.PointGeometry(cell.centroid, cell.spatialReference)
+        pc = cg.projectAs(sr)
 
-    conn.close()
-    return arr_FID, MFID
-
-# Start Here
-project = arcpy.mp.ArcGISProject("CURRENT")
-project_folder = os.path.dirname(project.filePath)
-gdb = os.path.join(project_folder, 'Default.gdb')
-line_fin = os.path.join(gdb, "PolylineLayer")
-arcpy.env.workspace = gdb
-
-sr = arcpy.SpatialReference(4326)
-project = arcpy.mp.ArcGISProject("CURRENT")
-project_folder = os.path.dirname(project.filePath)
-directory = os.path.join(project_folder, 'ConvertedSHP')
-spatial_reference = 4326
-num_arr, mainfileFID_arr = get_ids()
-mainfileFID_arr = sorted(mainfileFID_arr)
-
-for filename in os.listdir(directory):
-    if filename.endswith('.shp'):
-        key = filename.split("_")[1]
-        if int(key) in num_arr:
-            print(key)
-            shapefile_path = os.path.join(directory, filename)
-            desc = arcpy.Describe(shapefile_path)
-            spatial_reference = desc.spatialReference
+        p = arcpy.Point(pc.centroid.X, pc.centroid.Y)
+        ep = arcpy.PointGeometry(p, sr)
+        
+        arr.append(ep)
+        
+        dist_to_lookup = ep.distanceTo(to_start_focus)
+        dist_to_central = ep.distanceTo(start_point)
+        
+        if dist_to_central < dist_to_lookup:
+            df.at[index, 'Eliminate'] = False
+        else:
+            df.at[index, 'Eliminate'] = True
             
-            # Load shapefile into a DataFrame
-            cols = ['FID', 'Id', 'gridcode', 'SHAPE@']
-            numpy_array = arcpy.da.TableToNumPyArray(shapefile_path, cols)
-            df = pd.DataFrame(numpy_array)
+        df.at[index, 'Distance_lookup'] = dist_to_lookup
+        df.at[index, 'Distance_central'] = dist_to_central
+        
+    filtered_new = df[df['Eliminate'] == False]
+        
+    min_distance_row = filtered_new.loc[filtered_new['Distance_central'].idxmin()]
 
-            max_gridcode = df['gridcode'].max()
-            min_gridcode = df['gridcode'].min()
-            range_gridcode = round(((max_gridcode - min_gridcode) * 0.35) + min_gridcode)
-            filtered_df = df[df['gridcode'] <= range_gridcode]
-            filtered_df = filtered_df.reset_index()
+    # Get the 'OID@' of that row
+    min_oid = min_distance_row['SHAPE@']
+    
+    spoint = extract_coordinates(shape_value)
+    epoint = extract_coordinates(min_oid)
+    array = arcpy.Array([spoint, epoint])
 
-            start_point = get_id_sjo(key)
-            filtered_df['distance'] = 999
-
-            for index, row in filtered_df.iterrows():
-                cell = row['SHAPE@']
-                centroid_geom = arcpy.PointGeometry(cell.centroid, cell.spatialReference)
-                projected_centroid = centroid_geom.projectAs(spatial_reference)
-
-                point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
-                end_point = arcpy.PointGeometry(point, spatial_reference)
-
-                distance = start_point.distanceTo(end_point)
-                filtered_df.at[index, 'distance'] = distance
-                
-                # ----
-                
-            # First, find the row with the minimum distance
-            lowest_gridcode_df = filtered_df.nsmallest(5, 'gridcode')
-            fid_of_min_value = lowest_gridcode_df.at[lowest_gridcode_df['distance'].idxmin(), 'Id']
-
-            # ---- Conert to 25 lowest and closest to Point
-
-            lowest_ele_id = fid_of_min_value
-
-            # Sort the DataFrame by 'Rank' (distance) and reset the index
-            sorted_df = filtered_df.sort_values(by='distance', ascending=True).reset_index(drop=True)
-
-            # Find the index of the row where 'Id' == lowest_ele_id
-            index_of_row_start = sorted_df[sorted_df['Id'] == lowest_ele_id].index[0]
-  
-            # Get the 5 rows above and 5 rows below using iloc
-            start_index = max(index_of_row_start - 30, 0)  # Ensure we don't go out of bounds at the start
-            end_index = min(index_of_row_start + 31, len(sorted_df))  # Ensure we don't go out of bounds at the end
-
-            surrounding_rows = sorted_df.iloc[start_index:end_index].reset_index(drop=True)
-            surrounding_rows['Id_diff'] = abs(surrounding_rows['Id'] - lowest_ele_id).reset_index(drop = True)
-
-            # Find the row with the maximum difference
-            max_diff_row = surrounding_rows.loc[surrounding_rows['Id_diff'].idxmax()]
-
-            # Extract the 'Id' value from that row
-            furthest_id = max_diff_row['Id']
-            index_of_row_end = sorted_df[sorted_df['Id'] == furthest_id].index[0]
-
-            # ----
-
-            end_point = sorted_df.iloc[index_of_row_end]['SHAPE@']
-            start_point = sorted_df.iloc[index_of_row_start]['SHAPE@']
-            spoint = extract_coordinates(start_point)
-            epoint = extract_coordinates(end_point)
-
-            # ----
-            data_dict = {}
-            array = arcpy.Array([spoint, epoint])
-            line = arcpy.Polyline(array, sr)
-            data_dict[lowest_ele_id] = line
-
-            output_fc = os.path.join(gdb,"testline")
-            arcpy.CopyFeatures_management(line, output_fc)
-            # ----
-            
-            data_dict = {}
-            array = arcpy.Array([spoint, epoint])
-            line = arcpy.Polyline(array, sr)
-            data_dict[lowest_ele_id] = line
-
-            with arcpy.da.InsertCursor(line_fin, ["SHAPE@", "FID"]) as cursor:
-                for key, val in data_dict.items():
-                    try:
-                        cursor.insertRow([val, key])
-                        print('Inserted.')
-                    except Exception as e:
-                        print(f"Error creating polyline for key {key} with value {val}: {e}")
-            
-            # ----
-
-            
-print(sorted_df)     
-print('done')             
-
-
-
-"""
-start_point = sorted_df.iloc[index_of_row_start]['SHAPE@']
-centroid_geom = arcpy.PointGeometry(start_point.centroid, start_point.spatialReference)
-projected_centroid = centroid_geom.projectAs(spatial_reference)
-point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
-sp_point = arcpy.PointGeometry(point, spatial_reference)
-spoint = extract_coordinates(start_point)
-
-for index, row in surrounding_rows.iterrows():
-    cell = row['SHAPE@']
-    centroid_geom = arcpy.PointGeometry(cell.centroid, cell.spatialReference)
-    projected_centroid = centroid_geom.projectAs(spatial_reference)
-
-    point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
-    end_point = arcpy.PointGeometry(point, spatial_reference)
-
-    distance = sp_point.distanceTo(end_point)
-    surrounding_rows.at[index, 'distance_end_point'] = distance
-
-print(surrounding_rows[['Id', 'gridcode', 'distance', 'distance_end_point']])
-
-# Sort by 'distance to the point centered around' (Column A) in ascending order
-sorted_df = surrounding_rows.sort_values(by='distance', ascending=True)
-
-# Further sort by 'distance to the point looking at' (Column B) in descending order
-sorted_df = surrounding_rows.sort_values(by='distance_end_point', ascending=False)
-
-print(sorted_df[['Id', 'gridcode', 'distance', 'distance_end_point']])
-
-"""
-
-"""
-data_dict = {}
-array = arcpy.Array([spoint, epoint])
-line = arcpy.Polyline(array, sr)
-data_dict[lowest_ele_id] = line
-
-output_fc = os.path.join(gdb,"testline")
-arcpy.CopyFeatures_management(line, output_fc)
-"""
+    #print(df[['OID@', 'diss', 'Eliminate', 'Distance_lookup', 'Distance_central']])
+    print(epoint)
+    return array
 
 def isolated_points():
     sr = arcpy.SpatialReference(4326)
@@ -219,11 +81,17 @@ def isolated_points():
             key = filename.split("_")[1]
             if int(key) in num_arr:
                 shapefile_path = os.path.join(directory, filename)
-                desc = arcpy.Describe(shapefile_path)
-                spatial_reference = desc.spatialReference
+                arcpy.AddField_management(shapefile_path, 'diss', 'TEXT', field_length=5)
+                
+                with arcpy.da.UpdateCursor(shapefile_path, ['diss']) as cursor:
+                    for row in cursor:
+                        row[0] = 'False' 
+                        cursor.updateRow(row)
+                
+
 
                 # Load shapefile into a DataFrame
-                cols = ['FID', 'Id', 'gridcode', 'SHAPE@']
+                cols = ['FID', 'Id', 'gridcode', 'SHAPE@', 'diss']
                 numpy_array = arcpy.da.TableToNumPyArray(shapefile_path, cols)
                 df = pd.DataFrame(numpy_array)
 
@@ -237,14 +105,14 @@ def isolated_points():
 
                 start_point = get_id_sjo(key)
                 filtered_df['distance'] = 999
-
+                filtered_df['diss'] = 'False'
                 for index, row in filtered_df.iterrows():
                     cell = row['SHAPE@']
                     centroid_geom = arcpy.PointGeometry(cell.centroid, cell.spatialReference)
-                    projected_centroid = centroid_geom.projectAs(spatial_reference)
+                    projected_centroid = centroid_geom.projectAs(sr)
 
                     point = arcpy.Point(projected_centroid.centroid.X, projected_centroid.centroid.Y)
-                    end_point = arcpy.PointGeometry(point, spatial_reference)
+                    end_point = arcpy.PointGeometry(point, sr)
 
                     distance = start_point.distanceTo(end_point)
                     filtered_df.at[index, 'distance'] = distance
@@ -254,52 +122,40 @@ def isolated_points():
                 # First, find the row with the minimum distance
                 lowest_gridcode_df = filtered_df.nsmallest(5, 'gridcode')
                 fid_of_min_value = lowest_gridcode_df.at[lowest_gridcode_df['distance'].idxmin(), 'Id']
+            
+                
+                #filtered_df.loc[filtered_df['Id'] == fid_of_min_value, 'diss'] = 'True'
+                with arcpy.da.UpdateCursor(shapefile_path, ['Id', 'diss']) as cursor:
+                    for row in cursor:
+                        if row[0] == fid_of_min_value:
+                            row[1] = 'True' 
+                            cursor.updateRow(row)
+                
+                # Dissolve operation
+                filtered_df = filtered_df.reset_index()
 
-                # ---- Conert to 25 lowest and closest to Point
+                un_arr = filtered_df['gridcode'].unique()
 
-                lowest_ele_id = fid_of_min_value
+                # Create an in-memory feature layer for selection
+                arcpy.MakeFeatureLayer_management(shapefile_path, "temp_layer")
 
-                # Sort the DataFrame by 'Rank' (distance) and reset the index
-                sorted_df = filtered_df.sort_values(by='distance', ascending=True).reset_index(drop=True)
+                # Construct the SQL query to select rows with gridcode in un_arr
+                sql_query = f"gridcode IN ({','.join(map(str, un_arr))})"
 
-                # Find the index of the row where 'Id' == lowest_ele_id
-                index_of_row_start = sorted_df[sorted_df['Id'] == lowest_ele_id].index[0]
+                # Select features based on the SQL query
+                arcpy.SelectLayerByAttribute_management("temp_layer", "NEW_SELECTION", sql_query)
 
-                # Get the 5 rows above and 5 rows below using iloc
-                start_index = max(index_of_row_start - 40, 0)  # Ensure we don't go out of bounds at the start
-                end_index = min(index_of_row_start + 41, len(sorted_df))  # Ensure we don't go out of bounds at the end
+                # Define the output path for the dissolved shapefile
+                output_dissolve_path = os.path.join(gdb, "dissolved_output")
 
-                surrounding_rows = sorted_df.iloc[start_index:end_index].reset_index(drop=True)
-                surrounding_rows['Id_diff'] = abs(surrounding_rows['Id'] - lowest_ele_id).reset_index(drop = True)
-
-                # Find the row with the maximum difference
-                max_diff_row = surrounding_rows.loc[surrounding_rows['Id_diff'].idxmax()]
-
-                # Extract the 'Id' value from that row
-                furthest_id = max_diff_row['Id']
-                index_of_row_end = sorted_df[sorted_df['Id'] == furthest_id].index[0]
-
-                # ----
-
-                end_point = sorted_df.iloc[index_of_row_end]['SHAPE@']
-                start_point = sorted_df.iloc[index_of_row_start]['SHAPE@']
-                spoint = extract_coordinates(start_point)
-                epoint = extract_coordinates(end_point)
-
-                # ----
+                # Perform the pairwise dissolve on the selected features
+                arcpy.analysis.PairwiseDissolve("temp_layer", output_dissolve_path, dissolve_field="diss", multi_part = "SINGLE_PART")
+                
+                oid = true_value()
+                
                 data_dict = {}
-                array = arcpy.Array([spoint, epoint])
-                line = arcpy.Polyline(array, sr)
-                data_dict[lowest_ele_id] = line
-
-                output_fc = os.path.join(gdb,"testline")
-                arcpy.CopyFeatures_management(line, output_fc)
-                # ----
-
-                data_dict = {}
-                array = arcpy.Array([spoint, epoint])
-                line = arcpy.Polyline(array, sr)
-                data_dict[lowest_ele_id] = line
+                line = arcpy.Polyline(oid, sr)
+                data_dict[key] = line
                 line_fin = os.path.join(gdb, "PolylineLayer")
                 with arcpy.da.InsertCursor(line_fin, ["SHAPE@", "FID"]) as cursor:
                     for key, val in data_dict.items():
@@ -308,4 +164,67 @@ def isolated_points():
                         except Exception as e:
                             print(f"Error creating polyline for key {key} with value {val}: {e}")
 
-                # ----
+
+
+if __name__ == "__main__":
+    # Environment setup
+    current_timestamp = datetime.now()
+    arcpy.env.overwriteOutput = True
+    #arcpy.env.addOutputsToMap = False
+
+    # Get the current ArcGIS Pro project and its folder
+    project = arcpy.mp.ArcGISProject("CURRENT")
+    project_folder = os.path.dirname(project.filePath)
+    gdb = os.path.join(project_folder, 'Default.gdb')
+    
+    # Create necessary folders and geodatabases
+    #holderFolder()
+
+    # Generate random number and get spatial information
+    singlepart_rand = random.randint(1, 99999)
+    x, sjo_Number = get_sp() 
+    sjo_Number += 0#1
+    spatial_reference = arcpy.SpatialReference(4326)  
+
+    # Perform preliminary data processing
+    '''
+    working_copy()
+    holderFolder()
+    check_sqlite()
+    spatial_join()
+
+    # Get DataFrame from the spatial join result and populate folders
+    df_ret = get_df("SpatialJoin_Output")
+    populate_folder(df_ret)
+
+    # CRS conversion
+    name = "PointLayer"
+    convert_crs(name)
+
+    # Geospatial data processing
+    process_geospatial_data()
+    correct_output()
+    
+    # Mask extraction and shapefile conversion
+    keys_list = mask_extraction()
+    convert_shp(keys_list)
+    '''
+    # Prepare to process the shapefiles
+    directory = os.path.join(project_folder, 'ConvertedSHP')
+    file_desc = os.path.join(project_folder, f'SJO/SpatialJoin_Output{sjo_Number}.shp')
+    
+    desc = arcpy.Describe(file_desc)
+    spatial_reference = desc.spatialReference
+
+    # Initialize data storage
+    data_dict = {}
+    num_arr, mainfileFID_arr = get_ids()
+    mainfileFID_arr = sorted(mainfileFID_arr)
+
+    # Process shapefiles
+    isolated_points()
+
+    # Cleanup and finalize
+    #cleanup(keys_list)
+    #clean_hillshades()
+    print('done_main_file')
