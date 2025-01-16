@@ -201,3 +201,13 @@ sorted_df = surrounding_rows.sort_values(by='distance_end_point', ascending=Fals
 print(sorted_df[['Id', 'gridcode', 'distance', 'distance_end_point']])
 
 """
+
+"""
+data_dict = {}
+array = arcpy.Array([spoint, epoint])
+line = arcpy.Polyline(array, sr)
+data_dict[lowest_ele_id] = line
+
+output_fc = os.path.join(gdb,"testline")
+arcpy.CopyFeatures_management(line, output_fc)
+"""
