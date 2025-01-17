@@ -827,6 +827,7 @@ def working_copy():
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
 
+
 def extract_coordinates(shape):
     sr = arcpy.SpatialReference(4326)
     projected_shape = shape.projectAs(sr)
@@ -925,7 +926,7 @@ def isolated_points():
 
                 max_gridcode = df['gridcode'].max()
                 min_gridcode = df['gridcode'].min()
-                range_gridcode = round(((max_gridcode - min_gridcode) * 0.5) + min_gridcode)
+                range_gridcode = round(((max_gridcode - min_gridcode) * 0.45) + min_gridcode)
 
                 filtered_df = df[df['gridcode'] <= range_gridcode]
                 filtered_df = filtered_df.reset_index()
@@ -992,7 +993,6 @@ def isolated_points():
                             cursor.insertRow([val, key_temp])
                         except Exception as e:
                             print(f"Error creating polyline for key {key} with value {val}: {e}")
-
 
 if __name__ == "__main__":
     # Environment setup
