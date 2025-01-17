@@ -14,6 +14,7 @@ import io
 from datetime import datetime
 from pathlib import Path
 import zipfile
+import requests
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -54,7 +55,8 @@ def check_sqlite():
         Processed INTEGER,
         MainFileID INTEGER,
         X_LOCATION REAL,
-        Y_LOCATION REAL
+        Y_LOCATION REAL,
+        DateTimeAdded TEXT
     )
     """)
     conn.close()
@@ -754,10 +756,27 @@ def clean_hillshades():
     else:
         pass
 
-        
+def get_point_sjo(key):
+    sr = arcpy.SpatialReference(4326)
+    id = int(key)
+    output_folder = os.path.join(project_folder, "SJO")
+    fp = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
+    cols = ['TARGET_FID', 'SHAPE@', 'FID_ID']
+    numpy_array = arcpy.da.TableToNumPyArray(fp, cols)
+    df = pd.DataFrame(numpy_array)
+    df_filter = df[df['FID_ID'] == id]
+
+    cell = df_filter.iloc[0, 1]
+    return cell
+
 def working_copy():
     sr = arcpy.SpatialReference(4326)
     db = os.path.join(project_folder, "Default.gdb")
+    output_excel_path_ip = os.path.join(project_folder, "IP_PointLayer.xlsx")
+    df = pd.read_excel(output_excel_path_ip)
+
+    # Extract only the 'Id' column
+    df_id_only = df[['Id']]
 
     for map in project.listMaps():
             for layer in map.listLayers():
@@ -767,7 +786,7 @@ def working_copy():
     cols = ['Id', 'SHAPE@']
     numpy_array = arcpy.da.TableToNumPyArray(fp2, cols)
     df = pd.DataFrame(numpy_array)
-
+    filtered_df = df[df['Id'].isin(df_id_only['Id'])]
     geo_arr = []
     id_arr = []
     FID = []
@@ -779,7 +798,7 @@ def working_copy():
 
     itter = count 
     print(itter, count, end)
-    for index, val in df.iloc[count-1:end-1].iterrows():
+    for index, val in filtered_df.iloc[count-1:end-1].iterrows():
         geo = val['SHAPE@']
         id_inst = val['Id']
         x = geo.centroid.X
@@ -823,61 +842,9 @@ def working_copy():
         for point, main_file_id, idf in zip(geo_arr, id_arr, FID):
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
-            
-            
-if __name__ == "__main__":
-    # Environment setup
-    current_timestamp = datetime.now()
-    arcpy.env.overwriteOutput = True
-    arcpy.env.addOutputsToMap = False
 
-    # Get the current ArcGIS Pro project and its folder
-    project = arcpy.mp.ArcGISProject("CURRENT")
-    project_folder = os.path.dirname(project.filePath)
-    gdb = os.path.join(project_folder, 'Default.gdb')
-    
-    # Create necessary folders and geodatabases
-    holderFolder()
-
-    # Generate random number and get spatial information
-    singlepart_rand = random.randint(1, 99999)
-    x, sjo_Number = get_sp() 
-    sjo_Number += 1
-    spatial_reference = arcpy.SpatialReference(4326)  
-
-    # Perform preliminary data processing
-    working_copy()
-    check_sqlite()
-    spatial_join()
-
-    # Get DataFrame from the spatial join result and populate folders
-    df_ret = get_df("SpatialJoin_Output")
-    populate_folder(df_ret)
-
-    # CRS conversion
-    name = "PointLayer"
-    convert_crs(name)
-
-    # Geospatial data processing
-    process_geospatial_data()
-    correct_output()
-    
-    # Mask extraction and shapefile conversion
-    keys_list = mask_extraction()
-    convert_shp(keys_list)
-
-    # Prepare to process the shapefiles
-    directory = os.path.join(project_folder, 'ConvertedSHP')
-    file_desc = os.path.join(project_folder, f'SJO/SpatialJoin_Output{sjo_Number}.shp')
-    
-    desc = arcpy.Describe(file_desc)
-    spatial_reference = desc.spatialReference
-
-    # Initialize data storage
-    data_dict = {}
-    num_arr, mainfileFID_arr = get_ids()
-    mainfileFID_arr = sorted(mainfileFID_arr)
-
+@time_it
+def insert_loop():
     # Process shapefiles
     for filename in os.listdir(directory):
         if filename.endswith('.shp'):
@@ -933,13 +900,108 @@ if __name__ == "__main__":
                 cursor.insertRow([polyline, mainfileFID_arr[count]])
             except Exception as e:
                 # If it fails, print the error and the value of val
-                arcpy.AddMessage(f"Error creating polyline for key {key} with value {val}: {e}")
+                print(f"Error creating polyline for key {key} with value {val}: {e}")
             finally:
                 count += 1
+
+def extract_coordinates(shape):
+    sr = arcpy.SpatialReference(4326)
+    projected_shape = shape.projectAs(sr)
+    point = arcpy.Point(projected_shape.centroid.X, projected_shape.centroid.Y)
+    return point
+
+
+def test_line_correction(point1, start_key, point2):
+    start_point  = {}
+    id_point = {}
+    end_point = {}
+    id_coords = extract_coordinates(start_key)
+    start_point['Start'] = [point1.X, point1.Y]
+    id_point['ID'] = [id_coords.X, id_coords.Y]
+    end_point ['End'] = [point2.X, point2.Y]
+    
+    start_x, start_y = start_point['Start']
+    id_x, id_y = id_point['ID']
+    end_x, end_y = end_point['End']
+
+    diff_x = abs(end_x - start_x)
+    diff_y = abs(end_y - start_y)
+
+    # Determine if the line is vertical or horizontal and adjust Start and End points
+    if diff_x > diff_y:
+        # More horizontal; adjust Y of Start and End to match ID
+        start_y = id_y
+        end_y = id_y
+    else:
+        # More vertical; adjust X of Start and End to match ID
+        start_x = id_x
+        end_x = id_x
+
+
+    adjusted_start = arcpy.Point(start_x, start_y)
+    adjusted_id = arcpy.Point(id_x, id_y)
+    adjusted_end = arcpy.Point(end_x, end_y)
+
+    array = arcpy.Array([adjusted_start, adjusted_id, adjusted_end])
+    return array
+
+if __name__ == "__main__":
+    # Environment setup
+    current_timestamp = datetime.now()
+    arcpy.env.overwriteOutput = True
+    arcpy.env.addOutputsToMap = False
+
+    # Get the current ArcGIS Pro project and its folder
+    project = arcpy.mp.ArcGISProject("CURRENT")
+    project_folder = os.path.dirname(project.filePath)
+    gdb = os.path.join(project_folder, 'Default.gdb')
+    
+    # Create necessary folders and geodatabases
+    #holderFolder()
+
+    # Generate random number and get spatial information
+    singlepart_rand = random.randint(1, 99999)
+    x, sjo_Number = get_sp() 
+    sjo_Number += 1
+    spatial_reference = arcpy.SpatialReference(4326)  
+
+    # Perform preliminary data processing
+    working_copy()
+    holderFolder()
+    check_sqlite()
+    spatial_join()
+
+    # Get DataFrame from the spatial join result and populate folders
+    df_ret = get_df("SpatialJoin_Output")
+    populate_folder(df_ret)
+
+    # CRS conversion
+    name = "PointLayer"
+    convert_crs(name)
+
+    # Geospatial data processing
+    process_geospatial_data()
+    correct_output()
+    
+    # Mask extraction and shapefile conversion
+    keys_list = mask_extraction()
+    convert_shp(keys_list)
+
+    # Prepare to process the shapefiles
+    directory = os.path.join(project_folder, 'ConvertedSHP')
+    file_desc = os.path.join(project_folder, f'SJO/SpatialJoin_Output{sjo_Number}.shp')
+    
+    desc = arcpy.Describe(file_desc)
+    spatial_reference = desc.spatialReference
+
+    # Initialize data storage
+    data_dict = {}
+    num_arr, mainfileFID_arr = get_ids()
+    mainfileFID_arr = sorted(mainfileFID_arr)
+
+    insert_loop()
 
     # Cleanup and finalize
     cleanup(keys_list)
     #clean_hillshades()
     print('done_main_file')
-
-
