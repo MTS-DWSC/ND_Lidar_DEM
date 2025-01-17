@@ -693,6 +693,19 @@ def get_id_sjo(key):
     geom = arcpy.PointGeometry(point, sr)
     return geom
 
+def get_point_sjo(key):
+    sr = arcpy.SpatialReference(4326)
+    id = int(key)
+    output_folder = os.path.join(project_folder, "SJO")
+    fp = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
+    cols = ['TARGET_FID', 'SHAPE@', 'FID_ID']
+    numpy_array = arcpy.da.TableToNumPyArray(fp, cols)
+    df = pd.DataFrame(numpy_array)
+    df_filter = df[df['FID_ID'] == id]
+
+    cell = df_filter.iloc[0, 1]
+    return cell
+
 @time_it
 def cleanup(keys_list) -> None:
     ConvertedSHP = os.path.join(project_folder, 'ConvertedSHP')
@@ -827,7 +840,6 @@ def working_copy():
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
 
-
 def extract_coordinates(shape):
     sr = arcpy.SpatialReference(4326)
     projected_shape = shape.projectAs(sr)
@@ -850,7 +862,7 @@ def get_central_points(id_key):
     return central_point_coords
 
 
-def true_value(new_key, df_dissolve):
+def true_value(new_key, df_dissolve, start_key):
     # -----------------------
     #cols = ['OID@', 'diss', 'SHAPE@']
     #numpy_array = arcpy.da.TableToNumPyArray(output_dissolve_path, cols)
@@ -887,16 +899,22 @@ def true_value(new_key, df_dissolve):
             
         df.at[index, 'Distance_lookup'] = dist_to_lookup
         df.at[index, 'Distance_central'] = dist_to_central
-    filtered_new = df[df['Eliminate'] == False]
-    print(df[['OID@', 'diss', 'Eliminate', 'Distance_lookup', 'Distance_central']])
-    
-    min_distance_row = filtered_new.loc[filtered_new['Distance_central'].idxmin()]
-
-    # Get the 'OID@' of that row
-    min_oid = min_distance_row['SHAPE@']
     
     spoint = extract_coordinates(shape_value)
-    epoint = extract_coordinates(min_oid)
+    
+    if df['Eliminate'].all():
+        start_coord = extract_coordinates(start_key)
+        epoint = start_coord
+        print("No valid dissolve.")
+    else:
+        filtered_new = df[df['Eliminate'] == False]
+        min_distance_row = filtered_new.loc[filtered_new['Distance_central'].idxmin()]
+        min_oid = min_distance_row['SHAPE@']
+        epoint = extract_coordinates(min_oid)
+        
+    print(df[['OID@', 'diss', 'Eliminate', 'Distance_lookup', 'Distance_central']])
+    
+   
     array = arcpy.Array([spoint, epoint])
 
     return array
@@ -931,6 +949,7 @@ def isolated_points():
                 filtered_df = df[df['gridcode'] <= range_gridcode]
                 filtered_df = filtered_df.reset_index()
                 start_point = get_id_sjo(key)
+                start_key = get_point_sjo(key)
                 filtered_df['distance'] = 999
                 filtered_df['diss'] = 'False'
                 for index, row in filtered_df.iterrows():
@@ -980,7 +999,7 @@ def isolated_points():
                 cols = ['OID@', 'diss', 'SHAPE@']
                 numpy_array = arcpy.da.TableToNumPyArray(output_dissolve_path, cols)
                 df_dissolve = pd.DataFrame(numpy_array)
-                oid = true_value(key, df_dissolve)
+                oid = true_value(key, df_dissolve, start_key)
                 count += 1
                 
                 data_dict = {}
