@@ -402,7 +402,7 @@ def convert_crs(name):
     return
 
 @time_it
-def process_geospatial_data(buffer_distance="35 Meters"):
+def process_geospatial_data(buffer_distance="25 Meters"):
     # Access the current project and workspace
     attempt, max_tries = 0, 3
     path = os.path.join(project_folder, "HolderFolder")
@@ -840,6 +840,41 @@ def working_copy():
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
 
+def test_line_correction(point1, start_key, point2):
+    start_point  = {}
+    id_point = {}
+    end_point = {}
+    id_coords = extract_coordinates(start_key)
+    start_point['Start'] = [point1.X, point1.Y]
+    id_point['ID'] = [id_coords.X, id_coords.Y]
+    end_point ['End'] = [point2.X, point2.Y]
+    
+    start_x, start_y = start_point['Start']
+    id_x, id_y = id_point['ID']
+    end_x, end_y = end_point['End']
+
+    diff_x = abs(end_x - start_x)
+    diff_y = abs(end_y - start_y)
+
+    # Determine if the line is vertical or horizontal and adjust Start and End points
+    if diff_x > diff_y:
+        # More horizontal; adjust Y of Start and End to match ID
+        start_y = id_y
+        end_y = id_y
+    else:
+        # More vertical; adjust X of Start and End to match ID
+        start_x = id_x
+        end_x = id_x
+
+
+    adjusted_start = arcpy.Point(start_x, start_y)
+    adjusted_id = arcpy.Point(id_x, id_y)
+    adjusted_end = arcpy.Point(end_x, end_y)
+
+    array = arcpy.Array([adjusted_start, adjusted_id, adjusted_end])
+    return array
+
+
 def extract_coordinates(shape):
     sr = arcpy.SpatialReference(4326)
     projected_shape = shape.projectAs(sr)
@@ -915,9 +950,10 @@ def true_value(new_key, df_dissolve, start_key):
     print(df[['OID@', 'diss', 'Eliminate', 'Distance_lookup', 'Distance_central']])
     
    
-    array = arcpy.Array([spoint, epoint])
+    #array = arcpy.Array([spoint, epoint])
+    array_res = test_line_correction(spoint, start_key, epoint)
 
-    return array
+    return array_res
 
 @time_it
 def isolated_points():
@@ -944,7 +980,7 @@ def isolated_points():
 
                 max_gridcode = df['gridcode'].max()
                 min_gridcode = df['gridcode'].min()
-                range_gridcode = round(((max_gridcode - min_gridcode) * 0.45) + min_gridcode)
+                range_gridcode = round(((max_gridcode - min_gridcode) * 0.5) + min_gridcode)
 
                 filtered_df = df[df['gridcode'] <= range_gridcode]
                 filtered_df = filtered_df.reset_index()
