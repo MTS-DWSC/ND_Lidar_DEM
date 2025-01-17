@@ -827,9 +827,6 @@ def working_copy():
             poly_point = arcpy.PointGeometry(point, sr)
             cursor.insertRow([poly_point, main_file_id, idf, max_processed])
 
-
-
-# ------
 def extract_coordinates(shape):
     sr = arcpy.SpatialReference(4326)
     projected_shape = shape.projectAs(sr)
@@ -852,12 +849,12 @@ def get_central_points(id_key):
     return central_point_coords
 
 
-def true_value(new_key):
-    print(f"This is key1: {new_key}")
+def true_value(new_key, df_dissolve):
     # -----------------------
-    cols = ['OID@', 'diss', 'SHAPE@']
-    numpy_array = arcpy.da.TableToNumPyArray('dissolved_output', cols)
-    df = pd.DataFrame(numpy_array)
+    #cols = ['OID@', 'diss', 'SHAPE@']
+    #numpy_array = arcpy.da.TableToNumPyArray(output_dissolve_path, cols)
+    #df = pd.DataFrame(numpy_array)
+    df = df_dissolve
     dis_df = df[df['diss'] == 'True']
     shape_value = dis_df['SHAPE@'].iloc[0]
     centroid_geom = arcpy.PointGeometry(shape_value.centroid, shape_value.spatialReference)
@@ -867,11 +864,6 @@ def true_value(new_key):
     # -----------------------
     sp = get_id_sjo(new_key)
     
-    
-    
-    
-    
-    print(f"This is key2: {new_key}")
     
     df['Eliminate'] = True
     df['Distance_lookup'] = 0
@@ -894,7 +886,6 @@ def true_value(new_key):
             
         df.at[index, 'Distance_lookup'] = dist_to_lookup
         df.at[index, 'Distance_central'] = dist_to_central
-    print(f"This is key3: {new_key}")
     filtered_new = df[df['Eliminate'] == False]
     print(df[['OID@', 'diss', 'Eliminate', 'Distance_lookup', 'Distance_central']])
     
@@ -907,17 +898,15 @@ def true_value(new_key):
     epoint = extract_coordinates(min_oid)
     array = arcpy.Array([spoint, epoint])
 
-    print(epoint)
-    print(f"This is key4: {new_key}")
     return array
 
+@time_it
 def isolated_points():
     count = 0
     sr = arcpy.SpatialReference(4326)
     for filename in os.listdir(directory):
         if filename.endswith('.shp'):
             key = filename.split("_")[1]
-            print(f"first loop of key {key}")
             if int(key) in num_arr:
                 shapefile_path = os.path.join(directory, filename)
                 arcpy.AddField_management(shapefile_path, 'diss', 'TEXT', field_length=5)
@@ -936,11 +925,10 @@ def isolated_points():
 
                 max_gridcode = df['gridcode'].max()
                 min_gridcode = df['gridcode'].min()
-                range_gridcode = round(((max_gridcode - min_gridcode) * 0.45) + min_gridcode)
+                range_gridcode = round(((max_gridcode - min_gridcode) * 0.5) + min_gridcode)
 
                 filtered_df = df[df['gridcode'] <= range_gridcode]
                 filtered_df = filtered_df.reset_index()
-                print(f'Key before start_point {key}')
                 start_point = get_id_sjo(key)
                 filtered_df['distance'] = 999
                 filtered_df['diss'] = 'False'
@@ -984,15 +972,14 @@ def isolated_points():
                 arcpy.SelectLayerByAttribute_management("temp_layer", "NEW_SELECTION", sql_query)
 
                 # Define the output path for the dissolved shapefile
-                output_dissolve_path = os.path.join(gdb, "dissolved_output")
-
-                # Perform the pairwise dissolve on the selected features
-                arcpy.analysis.PairwiseDissolve("temp_layer", output_dissolve_path, dissolve_field="diss", multi_part = "SINGLE_PART")
+                #output_dissolve_path = os.path.join(gdb, "dissolved_output")
+                output_dissolve_path = "in_memory\\dissolved_output"
                 
-                if count == 2:
-                    break
-                print(f'Key before true_value(): {key}')
-                oid = true_value(key)
+                arcpy.analysis.PairwiseDissolve("temp_layer", output_dissolve_path, dissolve_field="diss", multi_part = "SINGLE_PART")
+                cols = ['OID@', 'diss', 'SHAPE@']
+                numpy_array = arcpy.da.TableToNumPyArray(output_dissolve_path, cols)
+                df_dissolve = pd.DataFrame(numpy_array)
+                oid = true_value(key, df_dissolve)
                 count += 1
                 
                 data_dict = {}
@@ -1005,12 +992,14 @@ def isolated_points():
                             cursor.insertRow([val, key_temp])
                         except Exception as e:
                             print(f"Error creating polyline for key {key} with value {val}: {e}")
-                print(f'Key after ins: {key}')
+
+
 if __name__ == "__main__":
     # Environment setup
     current_timestamp = datetime.now()
     arcpy.env.overwriteOutput = True
-    #arcpy.env.addOutputsToMap = False
+    arcpy.env.addOutputsToMap = False
+    sr = arcpy.SpatialReference(4326)
 
     # Get the current ArcGIS Pro project and its folder
     project = arcpy.mp.ArcGISProject("CURRENT")
@@ -1023,11 +1012,10 @@ if __name__ == "__main__":
     # Generate random number and get spatial information
     singlepart_rand = random.randint(1, 99999)
     x, sjo_Number = get_sp() 
-    sjo_Number += 0#1
+    sjo_Number += 1
     spatial_reference = arcpy.SpatialReference(4326)  
 
     # Perform preliminary data processing
-    '''
     working_copy()
     holderFolder()
     check_sqlite()
@@ -1048,7 +1036,7 @@ if __name__ == "__main__":
     # Mask extraction and shapefile conversion
     keys_list = mask_extraction()
     convert_shp(keys_list)
-    '''
+
     # Prepare to process the shapefiles
     directory = os.path.join(project_folder, 'ConvertedSHP')
     file_desc = os.path.join(project_folder, f'SJO/SpatialJoin_Output{sjo_Number}.shp')
@@ -1067,5 +1055,4 @@ if __name__ == "__main__":
     # Cleanup and finalize
     #cleanup(keys_list)
     #clean_hillshades()
-    print('done_main_file')                
-                        
+    print('done_main_file')
