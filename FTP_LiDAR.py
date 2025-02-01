@@ -28,9 +28,12 @@ def time_it(func):
 
 
 def check_gdb():
+    """
+    Creates File Geodatabase
+    
+    """
     check_file = os.path.join(project_folder, "Hold_DEMs")
     make_file = os.path.join(project_folder, "Hillshade_Converted")
-
     if not os.path.exists(check_file):
         os.makedirs(check_file)
     if not os.path.exists(make_file):
@@ -38,6 +41,10 @@ def check_gdb():
     return check_file
 
 def check_sqlite():
+    """
+    Creates SQLite File
+    
+    """
     # Define the path for the SQLite database file
     output_file = os.path.join(project_folder, "output_file.db")
 
@@ -61,11 +68,14 @@ def check_sqlite():
     """)
     conn.close()
     return    
-
+    
 def get_sp():
+    """
+    Get File ID's from SQLite Database
+    
+    """
     check_sqlite()
     db = os.path.join(project_folder, "Default.gdb")
-
     PL = os.path.join(db, "PointLayer")
 
     if os.path.exists(PL):
@@ -76,9 +86,7 @@ def get_sp():
 
     # Connect to the SQLite database
     conn = sqlite3.connect(output_file)
-
     cursor = conn.cursor()
-
     cursor.execute("SELECT max(FID), max(Processed) FROM recordManager")
     result = cursor.fetchone()
     
@@ -99,6 +107,10 @@ def get_sp():
 
 
 def holderFolder():
+    """
+    Create files for holding geospatial data
+    
+    """
     # Create the join folder
     project = arcpy.mp.ArcGISProject("CURRENT")
     project_folder = os.path.dirname(project.filePath)
@@ -146,6 +158,11 @@ def holderFolder():
     return
 
 def delete_sj():
+    """
+    Cleanup Files that are no longer needed
+    Delete everything but in use lockfiles.
+    
+    """
     output_folder = os.path.join(project_folder, "SJO")
     shape_folder = os.path.join(project_folder, "ConvertedSHP")
     holder_folder = os.path.join(project_folder, "HolderFolder")
@@ -177,6 +194,19 @@ def delete_sj():
 
 @time_it
 def spatial_join():
+    """
+    Function Name: perform_spatial_join_and_export
+    
+    Purpose:
+    This function performs a spatial join between a target feature layer and a join feature layer, and exports the results to a specified output location. 
+    If the spatial join results in an empty feature class, the function exports the relevant attributes from the target feature layer to a SQLite database.
+    
+    Outputs:
+    - A feature class resulting from the spatial join, saved in the SJO folder within the project folder.
+    - If the spatial join results in an empty feature class, a SQLite database (output_file.db) 
+      is created or updated with the relevant attributes from the target feature layer.
+    """
+    
     db = os.path.join(project_folder, "Default.gdb")
     target_features = os.path.join(db, "PointLayer")
     
@@ -260,7 +290,10 @@ def spatial_join():
 
 
 def get_df(text):
-    ## Get DataFrame for Master File
+    """
+    Creates a Pandas dataframe 
+    
+    """
     project = arcpy.mp.ArcGISProject("CURRENT")
     output_folder = os.path.join(project_folder, "SJO")
     fp = os.path.join(output_folder, f"SpatialJoin_Output{sjo_Number}.shp")
@@ -282,6 +315,17 @@ def get_df(text):
 
 @time_it
 def populate_folder(df_ret): 
+    """
+    Processes and manages hillshade raster files associated with spatial datasets. 
+    It interacts with an SQLite database to track processed files and downloads missing ones from an FTP server for the Department of Water Resources.
+
+    Key Features
+    - File Tracking: Ensures missing files are identified and downloaded.
+    - Database Logging: Records file details and status in a SQLite database.
+    - FTP Download Automation: Fetches files from a remote server if missing.
+    - Error Handling: Catches exceptions and logs invalid records.
+    """
+    
     destination_folder = check_gdb()
     hs_folder = os.path.join(project_folder, 'Hillshade_Converted')
     check_file = project_folder + "\\" + "output_file.db"
@@ -334,43 +378,30 @@ def populate_folder(df_ret):
                 continue
         conn.commit()
         conn.close()
-        
-
-## Not implemented in main, breaks raster when converting to hillshade
-@time_it
-def raster_crs_conversion():
-    arcpy.env.addOutputsToMap = False
-    fp = os.path.join(project_folder, "Hold_DEMs")
-    count = 0
-    # -- Specify the reference dataset for spatial reference --
-    spatial_ref = arcpy.SpatialReference(4326)
-    # -- Define the output folder --
-    output_folder = os.path.join(project_folder, "Projected")
-    os.makedirs(output_folder, exist_ok=True)  
-    for file in os.listdir(fp):
-        full_path = os.path.join(fp, file)
-        # -- Check if the file is a valid raster --
-        if arcpy.Describe(full_path).datatype == 'RasterDataset':
-            count += 1
-            fn = f"{os.path.splitext(file)[0]}"
-            out_raster = os.path.join(output_folder, f"{fn}.tif")
-        try:
-            # -- Project the raster --
-            temp_projected_raster = arcpy.management.ProjectRaster(full_path, "in_memory/temp_projected", spatial_ref)
-            exaggerated_dem = Times(temp_projected_raster, 1.5)
-
-            # -- Save the exaggerated DEM --
-            exaggerated_dem.save(out_raster)
-        except Exception as e:
-            print(f"Error processing {full_path}: {e}")
-    print("Finished CRS conversion.")
-    return
 
 @time_it
 def convert_crs(name):
+    """
+    Description:
+    This function processes raster files in the 'Hold_DEMs' directory, applies a hillshade transformation, and saves the results in the 'Hillshade_Converted' folder. The function utilizes ArcPy to check the spatial reference and process only raster datasets.
+    
+    Parameters:
+    - name (str): The input name used to retrieve spatial reference details.
+    
+    Process:
+    1. Determines the geodatabase folder using `check_gdb()`.
+    2. Defines the output directory for converted hillshade files (`Hillshade_Converted`).
+    3. Iterates through all raster files in the 'Hold_DEMs' directory.
+    4. Verifies that the file is a raster dataset using `arcpy.Describe()`.
+    5. Applies a hillshade transformation using `arcpy.Raster()` and `Hillshade()`.
+    6. Saves the output with a `_Hillshade.tif` suffix.
+    7. Skips processing if the output file already exists.
+    8. Prints progress updates for every 5 processed files.
+    9. Handles and logs errors encountered during processing.
+    """
+    
     fp = check_gdb()
     fp_converted = Path(fp).parent / 'Hillshade_Converted'
-    #fp_converted.mkdir(parents=True, exist_ok=True)
 
     spatial_ref = arcpy.Describe(name).spatialReference
     count = 0
@@ -389,8 +420,6 @@ def convert_crs(name):
                     in_raster = arcpy.Raster(str(file))
                     out_hillshade = Hillshade(in_raster)
                     
-                    
-                    
                     out_hillshade.save(str(output_path))
                     count += 1
                     
@@ -403,6 +432,24 @@ def convert_crs(name):
 
 @time_it
 def process_geospatial_data(buffer_distance="35 Meters"):
+    """
+    Function: process_geospatial_data
+    
+    Description:
+    This function processes geospatial data by filtering features based on an SQLite database, applying spatial operations, and converting multipart features to single-part.
+    
+    Steps:
+    1. Sets the workspace and connects to an SQLite database.
+    2. Retrieves valid FID values from the 'recordManager' table.
+    3. Creates a where clause to filter features in 'SpatialJoin_Output'.
+    4. Buffers the selected features by a specified distance.
+    5. Performs an erase operation using the 'Joined_Roads_Buffer' layer.
+    6. Converts multipart features to single-part with retries on failure.
+    
+    Parameters:
+    - buffer_distance (str, optional): The buffer distance (default: "35 Meters").
+    """
+    
     # Access the current project and workspace
     attempt, max_tries = 0, 3
     path = os.path.join(project_folder, "HolderFolder")
