@@ -518,8 +518,21 @@ def process_geospatial_data(buffer_distance="35 Meters"):
 
 @time_it
 def correct_output():
-    path = os.path.join(project_folder, "HolderFolder")
-    feature_class = os.path.join(path, f"singlepart_output{singlepart_rand}.shp")
+    """
+    Function: process_spatial_ranking
+    
+    Description:
+    This function analyzes a shapefile, calculates polygon areas, determines centroid coordinates in WGS 84, ranks features by area, and removes lower-ranked polygons.
+    
+    Steps:
+    1. Reads polygon features from 'singlepart_output' and calculates their area.
+    2. Projects centroids to WGS 84 and extracts coordinates.
+    3. Stores results in a DataFrame and ranks polygons within each 'TARGET_FID'.
+    4. Adds a 'RANK' field to the feature class if missing.
+    5. Updates rank values and deletes polygons ranked lower than 2.
+        path = os.path.join(project_folder, "HolderFolder")
+        feature_class = os.path.join(path, f"singlepart_output{singlepart_rand}.shp")
+    """
 
     geo_sr = arcpy.SpatialReference(4326)
 
@@ -569,6 +582,10 @@ def correct_output():
 
 
 def group_tracker(total_groups):
+    """
+    Method of creating unique ID's on Raster Masks.
+    
+    """
     starting_number = 0
     result = []
 
@@ -582,6 +599,11 @@ def group_tracker(total_groups):
     return result
 
 def get_ids():
+    """
+    Gets last processed batch of ID points.
+    
+    """
+    
     output_file = os.path.join(project_folder, "output_file.db")
 
     # Connect to the SQLite database
@@ -626,7 +648,25 @@ def get_FIDS(shapefile_path, number):
 
 @time_it
 def mask_extraction():
-    output_file = os.path.join(project_folder, "output_file.db")
+    """
+    Function: mask_extraction
+    
+    Description:
+    Extracts raster data using polygon masks based on the latest processed records in an SQLite database.
+    
+    Steps:
+    1. Connects to the SQLite database and retrieves the latest processed file paths.
+    2. Sorts and iterates through valid raster files.
+    3. Creates a temporary raster layer for processing.
+    4. Uses a grouping function to determine polygon masks.
+    5. Generates feature layers for selected polygons.
+    6. Performs mask extraction on the raster using these layers.
+    7. Saves extracted rasters to a geodatabase.
+    
+    Returns:
+    - List of processed FIDs.
+    """
+    
     folder = "HolderFolder"
     dest = os.path.join(project_folder, folder)
     so = os.path.join(dest, f'singlepart_output{singlepart_rand}.shp')
@@ -692,6 +732,23 @@ def mask_extraction():
 
 @time_it
 def convert_shp(keys_list):
+    """
+    Function: convert_shp
+    
+    Description:
+    Converts raster datasets from a geodatabase to shapefiles if their names match provided keys.
+    
+    Steps:
+    1. Ensures the output folder exists.
+    2. Sets the geodatabase as the workspace and retrieves raster names.
+    3. Iterates through rasters, checking for key matches.
+    4. Converts matching rasters to polygons and saves them as shapefiles.
+    5. Handles errors if conversion fails.
+    
+    Returns:
+    - None (shapefiles are saved in the output folder).
+    """
+
     gdb_path = os.path.join(project_folder, 'lidar.gdb')
     output_folder = os.path.join(project_folder, 'ConvertedSHP')
 
@@ -728,6 +785,11 @@ def convert_shp(keys_list):
 
 
 def get_id_sjo(key):
+    """
+    Gets PointGeometry object for input ID point.
+    
+    """
+    
     sr = arcpy.SpatialReference(4326)
     id = int(key)
     output_folder = os.path.join(project_folder, "SJO")
@@ -746,6 +808,9 @@ def get_id_sjo(key):
 
 @time_it
 def cleanup(keys_list) -> None:
+    """
+    Cleans up files that are no longer needed
+    """
     ConvertedSHP = os.path.join(project_folder, 'ConvertedSHP')
     Hold_DEMs = os.path.join(project_folder, 'Hold_DEMs')
     HolderFolder = os.path.join(project_folder, 'HolderFolder')
@@ -767,6 +832,10 @@ def cleanup(keys_list) -> None:
             
             
 def clean_hillshades():
+    """
+    Creates zipped file of Hillshades for later use.
+    
+    """
     hillshade_Con = os.path.join(project_folder, "Hillshade_Converted")
     archive_folder = os.path.join(project_folder, "Archive")
 
@@ -817,7 +886,21 @@ def get_point_sjo(key):
     return cell
 
 def working_copy():
-    sr = arcpy.SpatialReference(4326)
+    """
+    Description:
+    Creates a point feature class from selected records in an Excel file and spatial data.
+    
+    Steps:
+    1. Reads the 'Id' column from an Excel file.
+    2. Retrieves the data source of the "GRIT_Minor_Structures" layer.
+    3. Extracts geometries and filters records based on matching 'Id' values.
+    4. Prompts user input for the number of records to process.
+    5. Creates a new point feature class in a geodatabase.
+    6. Adds required fields: 'MainFileID', 'FID_ID', and 'PL_Process'.
+    7. Inserts selected records as point geometries into the feature class.
+        sr = arcpy.SpatialReference(4326)
+    """
+    
     db = os.path.join(project_folder, "Default.gdb")
     output_excel_path_ip = os.path.join(project_folder, "IP_PointLayer.xlsx")
     df = pd.read_excel(output_excel_path_ip)
@@ -892,6 +975,10 @@ def working_copy():
 
 @time_it
 def insert_loop():
+    """
+    Processes shapefiles, extracts the closest gridcode point, and creates polylines.
+    """
+
     # Process shapefiles
     for filename in os.listdir(directory):
         if filename.endswith('.shp'):
@@ -959,6 +1046,10 @@ def extract_coordinates(shape):
 
 
 def test_line_correction(point1, start_key, point2):
+    """
+    Adjusts line geometry to align with the most significant axis (horizontal or vertical).
+    """
+    
     start_point  = {}
     id_point = {}
     end_point = {}
