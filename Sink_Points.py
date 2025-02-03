@@ -459,8 +459,8 @@ def draw_flowpath():
     print(numpts)
 
     # make raster objects
-    elev = raster(elev_raster)
-    fz = raster(fill_raster)
+    elev = Raster(elev_raster)
+    fz = Raster(fill_raster)
 
     # set raster environment
     env.snapRaster = elev.catalogPath
